@@ -1,0 +1,115 @@
+{% extends 'base.html' %}
+
+{% block title %}Reservation Charting - Admin IRCTC{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h3 class="fw-bold mb-0 text-dark"><i class="fa-solid fa-clipboard-check text-warning me-2"></i>Reservation Charting Engine</h3>
+            <p class="text-muted small mb-0">Prepare final reservation charts, finalize RAC berth assignments, and auto-refund waitlisted tickets</p>
+        </div>
+    </div>
+
+    <!-- Chart Preparation Control Box -->
+    <div class="card shadow-sm border-0 rounded-3 mb-4">
+        <div class="card-header bg-dark text-white fw-bold py-3">
+            <i class="fa-solid fa-gears me-2 text-warning"></i> Trigger Reservation Charting
+        </div>
+        <div class="card-body p-4">
+            <form method="POST" action="{{ url_for('admin.chart_prepare') }}" class="row g-3 align-items-center">
+                <div class="col-md-5">
+                    <label class="form-label fw-semibold">Select Train</label>
+                    <select name="train_id" class="form-select" required>
+                        <option value="" disabled selected>Choose active train...</option>
+                        {% for t in trains %}
+                            <option value="{{ t.id }}">{{ t.train_number }} - {{ t.name }} ({{ t.source_station.code }} to {{ t.destination_station.code }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label fw-semibold">Journey Date</label>
+                    <input type="date" name="journey_date" class="form-control" required>
+                </div>
+                <div class="col-md-3 pt-md-4">
+                    <button type="submit" class="btn btn-warning fw-bold w-100 py-2 shadow-sm" onclick="return confirm('Prepare chart now? This will finalize all berths and auto-refund unconfirmed waitlisted tickets.');">
+                        <i class="fa-solid fa-bolt me-1"></i> Prepare Chart Now
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {% if report %}
+        <!-- Chart Execution Report Box -->
+        <div class="card shadow-md border-0 rounded-3 mb-4 bg-light">
+            <div class="card-header bg-success text-white fw-bold py-3">
+                <i class="fa-solid fa-circle-check me-2"></i> Reservation Chart Summary Report
+            </div>
+            <div class="card-body p-4">
+                <div class="row text-center g-3">
+                    <div class="col-md-3 border-end">
+                        <small class="text-muted d-block">Train</small>
+                        <strong class="fs-6 text-dark">{{ report.train_number }} - {{ report.train_name }}</strong>
+                    </div>
+                    <div class="col-md-3 border-end">
+                        <small class="text-muted d-block">Journey Date</small>
+                        <strong class="fs-6 text-dark">{{ report.journey_date }}</strong>
+                    </div>
+                    <div class="col-md-2 border-end">
+                        <small class="text-muted d-block">Confirmed (CNF)</small>
+                        <span class="badge badge-cnf fs-6">{{ report.cnf_count }}</span>
+                    </div>
+                    <div class="col-md-2 border-end">
+                        <small class="text-muted d-block">RAC Finalized</small>
+                        <span class="badge badge-rac fs-6">{{ report.rac_count }}</span>
+                    </div>
+                    <div class="col-md-2">
+                        <small class="text-muted d-block">WL Auto-Refunded</small>
+                        <span class="badge badge-wl fs-6">{{ report.auto_cancelled_wl }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+
+    <!-- Chart Logs Table -->
+    <div class="card shadow-sm border-0 rounded-3">
+        <div class="card-header bg-secondary text-white fw-bold py-3">
+            <i class="fa-solid fa-clock-rotate-left me-2"></i> Chart Preparation Log History
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Prepared At</th>
+                            <th>Train</th>
+                            <th>Journey Date</th>
+                            <th>Total Passengers</th>
+                            <th>CNF</th>
+                            <th>RAC</th>
+                            <th>Auto-Cancelled WL</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for log in chart_logs %}
+                            <tr>
+                                <td>{{ log.prepared_at.strftime('%d-%b-%Y %H:%M') }}</td>
+                                <td class="fw-bold">{{ log.train.train_number }} - {{ log.train.name }}</td>
+                                <td>{{ log.journey_date.strftime('%d-%b-%Y') }}</td>
+                                <td>{{ log.total_passengers }}</td>
+                                <td><span class="badge badge-cnf">{{ log.cnf_count }}</span></td>
+                                <td><span class="badge badge-rac">{{ log.rac_count }}</span></td>
+                                <td><span class="badge badge-wl">{{ log.auto_cancelled_wl_count }}</span></td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

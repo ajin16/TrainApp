@@ -1,0 +1,54 @@
+{% extends 'base.html' %}
+
+{% block title %}User Login - IRCTC{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-md-5">
+            <div class="card shadow-lg border-0 rounded-4">
+                <div class="card-header bg-irctc-gradient text-white text-center py-4 rounded-top-4">
+                    <i class="fa-solid fa-user-lock fa-2xl mb-2 text-warning"></i>
+                    <h4 class="fw-bold mb-0">IRCTC User Login</h4>
+                    <p class="small text-white-50 mb-0">Enter your credentials to access tickets & bookings</p>
+                </div>
+                <div class="card-body p-4">
+                    <form method="POST" action="{{ url_for('auth.login') }}">
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Username or Email</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-light"><i class="fa-solid fa-user text-muted"></i></span>
+                                <input type="text" name="username_or_email" class="form-control" placeholder="Enter username or email" required>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Password</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-light"><i class="fa-solid fa-key text-muted"></i></span>
+                                <input type="password" name="password" class="form-control" placeholder="Enter password" required>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="btn btn-irctc-orange w-100 py-2 rounded-3 shadow-sm mb-3">
+                            <i class="fa-solid fa-right-to-bracket me-2"></i> Sign In
+                        </button>
+                    </form>
+
+                    <div class="alert alert-info border-0 rounded-3 mb-0 small">
+                        <i class="fa-solid fa-lightbulb me-1 text-warning"></i> <strong>Quick Test Credentials:</strong>
+                        <ul class="mb-0 ps-3 mt-1">
+                            <li><strong>Passenger:</strong> <code>passenger</code> / <code>user123</code></li>
+                            <li><strong>Admin:</strong> <code>admin</code> / <code>admin123</code></li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="card-footer bg-light text-center py-3 rounded-bottom-4">
+                    <span class="small text-muted">Don't have an account? </span>
+                    <a href="{{ url_for('auth.register') }}" class="small fw-bold text-decoration-none">Register Now</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

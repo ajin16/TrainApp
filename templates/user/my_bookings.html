@@ -1,0 +1,101 @@
+{% extends 'base.html' %}
+
+{% block title %}My Train Bookings - IRCTC{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h3 class="fw-bold mb-1 text-dark"><i class="fa-solid fa-ticket text-warning me-2"></i>My Bookings History</h3>
+            <p class="text-muted small mb-0">View all active and past train ticket bookings</p>
+        </div>
+        <a href="{{ url_for('user.index') }}" class="btn btn-irctc-orange btn-sm">
+            <i class="fa-solid fa-plus me-1"></i> Book New Ticket
+        </a>
+    </div>
+
+    {% if not summaries %}
+        <div class="card shadow-sm border-0 text-center p-5">
+            <i class="fa-solid fa-ticket-simple fa-3x text-muted mb-3"></i>
+            <h5>No Bookings Found</h5>
+            <p class="text-muted small">You haven't booked any train tickets yet.</p>
+            <div>
+                <a href="{{ url_for('user.index') }}" class="btn btn-primary btn-sm">Search Trains Now</a>
+            </div>
+        </div>
+    {% else %}
+        <div class="row g-4">
+            {% for b in summaries %}
+                <div class="col-12">
+                    <div class="card shadow-sm border-0 rounded-3">
+                        <div class="card-header bg-light d-flex justify-content-between align-items-center py-3">
+                            <div>
+                                <span class="badge bg-dark text-warning fs-6 me-2">PNR: {{ b.pnr }}</span>
+                                <span class="fw-bold fs-5 text-dark">{{ b.train_number }} - {{ b.train_name }}</span>
+                            </div>
+                            <div>
+                                {% if b.status == 'BOOKED' %}
+                                    <span class="badge bg-success fs-6"><i class="fa-solid fa-check me-1"></i> Active</span>
+                                {% elif b.status == 'PARTIALLY_CANCELLED' %}
+                                    <span class="badge bg-warning text-dark fs-6"><i class="fa-solid fa-triangle-exclamation me-1"></i> Partially Cancelled</span>
+                                {% else %}
+                                    <span class="badge bg-secondary fs-6"><i class="fa-solid fa-ban me-1"></i> Cancelled</span>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <div class="card-body p-4">
+                            <div class="row align-items-center mb-3">
+                                <div class="col-md-3">
+                                    <small class="text-muted d-block">From</small>
+                                    <strong class="text-dark">{{ b.from_station_name }} ({{ b.from_station_code }})</strong>
+                                    <div class="small text-primary">Dep: {{ b.departure_time }}</div>
+                                </div>
+                                <div class="col-md-3">
+                                    <small class="text-muted d-block">To</small>
+                                    <strong class="text-dark">{{ b.to_station_name }} ({{ b.to_station_code }})</strong>
+                                    <div class="small text-primary">Arr: {{ b.arrival_time }}</div>
+                                </div>
+                                <div class="col-md-3">
+                                    <small class="text-muted d-block">Journey Date</small>
+                                    <strong class="text-dark">{{ b.journey_date }}</strong>
+                                </div>
+                                <div class="col-md-3 text-md-end">
+                                    <small class="text-muted d-block">Total Fare</small>
+                                    <span class="fs-5 fw-bold text-success">{{ b.total_fare }}</span>
+                                </div>
+                            </div>
+
+                            <!-- Passenger Summary List -->
+                            <div class="bg-light p-3 rounded-3 mb-3">
+                                <small class="fw-bold text-secondary d-block mb-2">Passengers:</small>
+                                <div class="d-flex flex-wrap gap-2">
+                                    {% for p in b.passengers %}
+                                        <span class="badge bg-white text-dark border p-2">
+                                            {{ p.name }} ({{ p.age }}/{{ p.gender }}) - 
+                                            <span class="badge {{ p.current_badge.badge }}">{{ p.current_status_text }}</span>
+                                            {% if p.seat_display != 'N/A' %} [{{ p.seat_display }}]{% endif %}
+                                        </span>
+                                    {% endfor %}
+                                </div>
+                            </div>
+
+                            <div class="d-flex justify-content-end gap-2">
+                                <a href="{{ url_for('user.ticket_detail', booking_id=b.booking_id) }}" class="btn btn-outline-primary btn-sm">
+                                    <i class="fa-solid fa-file-invoice me-1"></i> View / Print E-Ticket
+                                </a>
+                                {% if b.status != 'CANCELLED' and not b.chart_prepared %}
+                                    <a href="{{ url_for('user.cancel_ticket_form', booking_id=b.booking_id) }}" class="btn btn-outline-danger btn-sm">
+                                        <i class="fa-solid fa-ban me-1"></i> Cancel Passengers
+                                    </a>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

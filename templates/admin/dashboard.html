@@ -1,0 +1,106 @@
+{% extends 'base.html' %}
+
+{% block title %}Admin Dashboard - IRCTC Control Center{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+
+    <!-- Admin Nav Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h3 class="fw-bold mb-0 text-dark"><i class="fa-solid fa-user-shield text-warning me-2"></i>IRCTC Admin Control Center</h3>
+            <p class="text-muted small mb-0">System Overview, Train Management & Reservation Controls</p>
+        </div>
+        <div class="btn-group">
+            <a href="{{ url_for('admin.trains') }}" class="btn btn-primary btn-sm"><i class="fa-solid fa-train me-1"></i> Manage Trains</a>
+            <a href="{{ url_for('admin.bookings_list') }}" class="btn btn-outline-primary btn-sm"><i class="fa-solid fa-list me-1"></i> All Bookings</a>
+            <a href="{{ url_for('admin.chart_prepare') }}" class="btn btn-warning btn-sm fw-bold"><i class="fa-solid fa-clipboard-check me-1"></i> Charting Engine</a>
+        </div>
+    </div>
+
+    <!-- Analytics Metric Cards -->
+    <div class="row g-4 mb-4">
+        <div class="col-md-3">
+            <div class="card shadow-sm border-0 rounded-3 bg-white p-3 border-start border-4 border-primary">
+                <small class="text-muted fw-bold text-uppercase">Total System Revenue</small>
+                <h3 class="fw-bold text-success mb-0 mt-1">₹{{ "%.2f"|format(total_revenue) }}</h3>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card shadow-sm border-0 rounded-3 bg-white p-3 border-start border-4 border-info">
+                <small class="text-muted fw-bold text-uppercase">Total Bookings</small>
+                <h3 class="fw-bold text-primary mb-0 mt-1">{{ total_bookings }}</h3>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card shadow-sm border-0 rounded-3 bg-white p-3 border-start border-4 border-warning">
+                <small class="text-muted fw-bold text-uppercase">Active Trains</small>
+                <h3 class="fw-bold text-dark mb-0 mt-1">{{ total_trains }}</h3>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card shadow-sm border-0 rounded-3 bg-white p-3 border-start border-4 border-dark">
+                <small class="text-muted fw-bold text-uppercase">Passenger Breakdown</small>
+                <div class="mt-1 small">
+                    <span class="badge bg-success me-1">CNF: {{ total_cnf }}</span>
+                    <span class="badge bg-warning text-dark me-1">RAC: {{ total_rac }}</span>
+                    <span class="badge bg-danger">WL: {{ total_wl }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent System Bookings Table -->
+    <div class="card shadow-sm border-0 rounded-3">
+        <div class="card-header bg-dark text-white fw-bold py-3 d-flex justify-content-between align-items-center">
+            <span><i class="fa-solid fa-clock-rotate-left me-2 text-warning"></i> Recent System Transactions</span>
+            <a href="{{ url_for('admin.bookings_list') }}" class="btn btn-outline-light btn-sm">View All</a>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>PNR</th>
+                            <th>Train</th>
+                            <th>User</th>
+                            <th>Journey Date</th>
+                            <th>Class / Quota</th>
+                            <th>Fare</th>
+                            <th>Status</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for b in recent_bookings %}
+                            <tr>
+                                <td class="fw-bold text-primary">{{ b.pnr }}</td>
+                                <td>{{ b.train.train_number }} - {{ b.train.name }}</td>
+                                <td>{{ b.user.username }}</td>
+                                <td>{{ b.journey_date.strftime('%d-%b-%Y') }}</td>
+                                <td><span class="badge bg-secondary">{{ b.travel_class }} | {{ b.quota }}</span></td>
+                                <td class="fw-bold text-success">₹{{ "%.2f"|format(b.total_fare) }}</td>
+                                <td>
+                                    {% if b.status == 'BOOKED' %}
+                                        <span class="badge bg-success">BOOKED</span>
+                                    {% elif b.status == 'PARTIALLY_CANCELLED' %}
+                                        <span class="badge bg-warning text-dark">PARTIAL</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">CANCELLED</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <a href="{{ url_for('user.ticket_detail', booking_id=b.id) }}" class="btn btn-sm btn-outline-primary" target="_blank">
+                                        <i class="fa-solid fa-eye"></i> Ticket
+                                    </a>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

@@ -1,0 +1,157 @@
+{% extends 'base.html' %}
+
+{% block title %}Train Schedule & Route Timetable - IRCTC{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+
+    <!-- Search Header Card -->
+    <div class="card shadow-sm border-0 mb-4 rounded-3">
+        <div class="card-header bg-irctc-gradient text-white py-3">
+            <h5 class="mb-0 fw-bold"><i class="fa-solid fa-clock me-2"></i>TRAIN SCHEDULE & ROUTE ENQUIRY</h5>
+        </div>
+        <div class="card-body p-4">
+            <form action="{{ url_for('user.train_schedule') }}" method="GET" class="row g-3 align-items-center">
+                <div class="col-md-7">
+                    <label class="form-label fw-semibold text-secondary">Enter Train Number or Name</label>
+                    <div class="input-group">
+                        <span class="input-group-text bg-light"><i class="fa-solid fa-train"></i></span>
+                        <input type="text" name="train_number" class="form-control form-control-lg" placeholder="e.g. 12952 or Rajdhani Express" value="{{ query_num }}" required>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label fw-semibold text-secondary">Or Select from List</label>
+                    <select class="form-select form-select-lg" onchange="if(this.value) window.location.href=this.value;">
+                        <option value="" disabled selected>Quick Select Train...</option>
+                        {% for t in all_trains %}
+                            <option value="{{ url_for('user.train_schedule', train_number=t.train_number) }}" {% if selected_train and selected_train.id == t.id %}selected{% endif %}>
+                                {{ t.train_number }} - {{ t.name }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2 pt-md-4">
+                    <button type="submit" class="btn btn-irctc-orange btn-lg w-100 py-2">
+                        View Schedule
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {% if error_msg %}
+        <div class="alert alert-danger shadow-sm rounded-3">
+            <i class="fa-solid fa-triangle-exclamation me-2"></i> {{ error_msg }}
+        </div>
+    {% endif %}
+
+    {% if selected_train %}
+        <!-- Selected Train Details Card -->
+        <div class="card shadow-lg border-0 rounded-3 mb-4">
+            <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center py-3">
+                <div>
+                    <span class="badge bg-warning text-dark fs-6 me-2">{{ selected_train.train_number }}</span>
+                    <h4 class="d-inline fw-bold mb-0">{{ selected_train.name }}</h4>
+                </div>
+                <div>
+                    <span class="badge bg-secondary fs-6"><i class="fa-solid fa-calendar-days me-1"></i> Runs: {{ selected_train.operating_days }}</span>
+                </div>
+            </div>
+
+            <div class="card-body p-4">
+
+                <!-- Train Info Summary -->
+                <div class="row g-3 bg-light p-3 rounded-3 mb-4 text-center">
+                    <div class="col-md-4 border-end">
+                        <small class="text-muted d-block">Source Station</small>
+                        <strong class="fs-6 text-primary">{{ selected_train.source_station.name }} ({{ selected_train.source_station.code }})</strong>
+                    </div>
+                    <div class="col-md-4 border-end">
+                        <small class="text-muted d-block">Destination Station</small>
+                        <strong class="fs-6 text-primary">{{ selected_train.destination_station.name }} ({{ selected_train.destination_station.code }})</strong>
+                    </div>
+                    <div class="col-md-4">
+                        <small class="text-muted d-block">Configured Classes</small>
+                        <div>
+                            {% for cfg in selected_train.configs %}
+                                <span class="badge bg-dark me-1">{{ cfg.travel_class }}</span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Complete Timetable Table -->
+                <h5 class="fw-bold text-dark border-bottom pb-2 mb-3">
+                    <i class="fa-solid fa-list-ol text-primary me-2"></i>COMPLETE ROUTE TIMETABLE & HALTS
+                </h5>
+
+                <div class="table-responsive">
+                    <table class="table table-hover table-bordered align-middle text-center mb-0">
+                        <thead class="table-dark">
+                            <tr>
+                                <th style="width: 60px;">#</th>
+                                <th>Station Code</th>
+                                <th class="text-start">Station Name</th>
+                                <th>Arrival</th>
+                                <th>Departure</th>
+                                <th>Halt Time</th>
+                                <th>Distance (KM)</th>
+                                <th>Day</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for stop in schedule_details %}
+                                <tr {% if stop.stop_number == 1 or stop.stop_number == schedule_details|length %}class="table-primary fw-bold"{% endif %}>
+                                    <td><span class="badge bg-secondary">{{ stop.stop_number }}</span></td>
+                                    <td><span class="badge bg-dark fs-6">{{ stop.station_code }}</span></td>
+                                    <td class="text-start fw-bold">
+                                        {{ stop.station_name }}
+                                        <small class="text-muted d-block fw-normal">{{ stop.city }}</small>
+                                    </td>
+                                    <td class="text-primary fw-semibold">{{ stop.arrival_time }}</td>
+                                    <td class="text-success fw-semibold">{{ stop.departure_time }}</td>
+                                    <td>
+                                        {% if stop.halt_mins in ['Origin', 'Destination'] %}
+                                            <span class="badge bg-info text-dark">{{ stop.halt_mins }}</span>
+                                        {% else %}
+                                            <span class="badge bg-light text-dark border">{{ stop.halt_mins }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ stop.distance_km }} KM</td>
+                                    <td>Day {{ stop.day_number }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+            </div>
+        </div>
+    {% elif not query_num %}
+        <!-- Active Trains Showcase Grid -->
+        <div class="card shadow-sm border-0 rounded-3 p-4">
+            <h5 class="fw-bold text-dark mb-3"><i class="fa-solid fa-train text-primary me-2"></i>Explore Popular Indian Trains</h5>
+            <div class="row g-3">
+                {% for t in all_trains %}
+                    <div class="col-md-6 col-lg-4">
+                        <div class="card h-100 border shadow-xs p-3">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="badge bg-primary fs-6">{{ t.train_number }}</span>
+                                <span class="badge bg-light text-dark border">{{ t.operating_days }}</span>
+                            </div>
+                            <h6 class="fw-bold text-dark mb-1">{{ t.name }}</h6>
+                            <p class="small text-muted mb-3">
+                                {{ t.source_station.code }} $\rightarrow$ {{ t.destination_station.code }}
+                            </p>
+                            <a href="{{ url_for('user.train_schedule', train_number=t.train_number) }}" class="btn btn-outline-primary btn-sm mt-auto">
+                                <i class="fa-solid fa-clock me-1"></i> View Route & Timetable
+                            </a>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+    {% endif %}
+
+</div>
+{% endblock %}

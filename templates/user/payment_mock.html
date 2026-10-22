@@ -1,0 +1,99 @@
+{% extends 'base.html' %}
+
+{% block title %}IRCTC Payment Gateway Simulation{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-md-7">
+            <div class="card shadow-lg border-0 rounded-4">
+                <div class="card-header bg-irctc-gradient text-white py-3 rounded-top-4 text-center">
+                    <i class="fa-solid fa-lock fa-2xl text-warning mb-2"></i>
+                    <h4 class="fw-bold mb-0">IRCTC Secure Payment Gateway</h4>
+                    <p class="small text-white-50 mb-0">Order Summary & Payment Method Selection</p>
+                </div>
+                <div class="card-body p-4">
+                    
+                    <!-- Order Summary Box -->
+                    <div class="card bg-light border-0 p-3 mb-4 rounded-3">
+                        <div class="row align-items-center">
+                            <div class="col-8">
+                                <h6 class="fw-bold mb-1 text-primary">{{ train.train_number }} - {{ train.name }}</h6>
+                                <p class="mb-0 small text-muted">
+                                    {{ from_st.code }} <i class="fa-solid fa-arrow-right mx-1"></i> {{ to_st.code }} | 
+                                    Class: <strong>{{ pending.travel_class }}</strong> | 
+                                    Passengers: <strong>{{ pending.passengers_data | length }}</strong>
+                                </p>
+                            </div>
+                            <div class="col-4 text-end">
+                                <span class="d-block small text-muted">Amount Payable</span>
+                                <span class="fs-4 fw-bold text-success">₹{{ "%.2f"|format(pending.total_fare) }}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Payment Option Tabs -->
+                    <ul class="nav nav-pills nav-fill mb-4" id="paymentTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active fw-bold" id="upi-tab" data-bs-toggle="tab" data-bs-target="#upi" type="button" role="tab">
+                                <i class="fa-solid fa-qrcode me-1"></i> BHIM / UPI
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link fw-bold" id="card-tab" data-bs-toggle="tab" data-bs-target="#card" type="button" role="tab">
+                                <i class="fa-solid fa-credit-card me-1"></i> Card / NetBanking
+                            </button>
+                        </li>
+                    </ul>
+
+                    <form method="POST" action="{{ url_for('user.payment_mock') }}">
+                        <div class="tab-content mb-4" id="paymentTabsContent">
+                            
+                            <!-- UPI Tab -->
+                            <div class="tab-pane fade show active text-center" id="upi" role="tabpanel">
+                                <div class="py-3">
+                                    <div class="mb-3">
+                                        <i class="fa-solid fa-building-columns fa-3x text-primary mb-2"></i>
+                                        <h6>Enter Virtual Payment Address (VPA) / UPI ID</h6>
+                                    </div>
+                                    <input type="text" class="form-control text-center w-75 mx-auto py-2" placeholder="username@upi or username@paytm" value="passenger@okaxis" required>
+                                </div>
+                            </div>
+
+                            <!-- Card Tab -->
+                            <div class="tab-pane fade" id="card" role="tabpanel">
+                                <div class="row g-3">
+                                    <div class="col-12">
+                                        <label class="form-label small fw-semibold">Cardholder Name</label>
+                                        <input type="text" class="form-control" value="{{ session.get('full_name', 'RAHUL SHARMA') }}">
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label small fw-semibold">Card Number</label>
+                                        <input type="text" class="form-control" value="4532 •••• •••• 8892">
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label small fw-semibold">Expiry Date</label>
+                                        <input type="text" class="form-control" value="12/28">
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label small fw-semibold">CVV</label>
+                                        <input type="password" class="form-control" value="888">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="btn btn-irctc-orange btn-lg w-100 py-3 rounded-3 shadow">
+                            <i class="fa-solid fa-lock me-2"></i> Pay ₹{{ "%.2f"|format(pending.total_fare) }} & Confirm Booking
+                        </button>
+                    </form>
+
+                </div>
+                <div class="card-footer bg-light text-center py-3 rounded-bottom-4 small text-muted">
+                    <i class="fa-solid fa-shield-halved text-success me-1"></i> 128-bit SSL Encrypted Mock Gateway
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

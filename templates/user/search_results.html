@@ -1,0 +1,129 @@
+{% extends 'base.html' %}
+
+{% block title %}Train Search Results - IRCTC{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+
+    <!-- Search Summary Banner -->
+    <div class="card bg-irctc-gradient text-white shadow-sm border-0 mb-4 rounded-3 p-3">
+        <div class="row align-items-center">
+            <div class="col-md-8">
+                <h4 class="fw-bold mb-1">
+                    <i class="fa-solid fa-route text-warning me-2"></i>
+                    {{ from_st.name }} ({{ from_st.code }}) 
+                    <i class="fa-solid fa-arrow-right mx-2 text-warning"></i> 
+                    {{ to_st.name }} ({{ to_st.code }})
+                </h4>
+                <p class="mb-0 small text-white-50">
+                    <i class="fa-solid fa-calendar-day me-1"></i> Date of Journey: <strong>{{ journey_date }}</strong> | 
+                    <i class="fa-solid fa-train me-1"></i> {{ results | length }} Trains Found
+                </p>
+            </div>
+            <div class="col-md-4 text-md-end mt-2 mt-md-0">
+                <a href="{{ url_for('user.index') }}" class="btn btn-outline-light btn-sm rounded-pill">
+                    <i class="fa-solid fa-pen-to-square me-1"></i> Modify Search
+                </a>
+            </div>
+        </div>
+    </div>
+
+    {% if not results %}
+        <div class="card shadow-sm border-0 text-center p-5 my-4">
+            <i class="fa-solid fa-train-subway fa-3x text-muted mb-3"></i>
+            <h5>No Direct Trains Found</h5>
+            <p class="text-muted small">No active trains running between {{ from_st.name }} and {{ to_st.name }} on the selected route.</p>
+            <div>
+                <a href="{{ url_for('user.index') }}" class="btn btn-primary btn-sm">Search Another Date / Route</a>
+            </div>
+        </div>
+    {% else %}
+        <!-- Train Results List -->
+        <div class="row g-4">
+            {% for item in results %}
+                {% set train = item.train %}
+                {% set src_r = item.src_route %}
+                {% set dst_r = item.dst_route %}
+                
+                <div class="col-12">
+                    <div class="card shadow-sm border-0 rounded-3">
+                        <div class="card-header bg-light border-bottom d-flex justify-content-between align-items-center py-3">
+                            <div>
+                                <a href="{{ url_for('user.train_schedule', train_number=train.train_number) }}" class="text-decoration-none" title="View Full Train Schedule & Stops">
+                                    <span class="badge bg-dark text-warning fs-6 me-2">{{ train.train_number }}</span>
+                                    <span class="fw-bold fs-5 text-dark hover-underline">{{ train.name }}</span>
+                                    <i class="fa-solid fa-circle-info text-primary ms-1" style="font-size: 0.85rem;"></i>
+                                </a>
+                                <span class="badge bg-secondary ms-2">Runs: {{ train.operating_days }}</span>
+                            </div>
+                            <div class="text-muted small">
+                                <i class="fa-solid fa-road me-1"></i> Distance: <strong>{{ item.distance_km }} km</strong>
+                            </div>
+                        </div>
+
+                        <div class="card-body p-4">
+                            <!-- Timing Row -->
+                            <div class="row align-items-center text-center mb-4">
+                                <div class="col-md-4 text-md-start">
+                                    <h4 class="fw-bold mb-0 text-primary">{{ src_r.departure_time }}</h4>
+                                    <div class="fw-semibold text-dark">{{ from_st.name }} ({{ from_st.code }})</div>
+                                    <small class="text-muted">Day {{ src_r.day_number }}</small>
+                                </div>
+
+                                <div class="col-md-4 py-2">
+                                    <div class="text-muted small border-bottom pb-1 mb-1">Direct Train</div>
+                                    <i class="fa-solid fa-arrow-right-long fa-xl text-warning"></i>
+                                </div>
+
+                                <div class="col-md-4 text-md-end">
+                                    <h4 class="fw-bold mb-0 text-primary">{{ dst_r.arrival_time }}</h4>
+                                    <div class="fw-semibold text-dark">{{ to_st.name }} ({{ to_st.code }})</div>
+                                    <small class="text-muted">Day {{ dst_r.day_number }}</small>
+                                </div>
+                            </div>
+
+                            <!-- Class Availability Cards -->
+                            <h6 class="fw-bold text-secondary mb-3"><i class="fa-solid fa-chair me-1"></i> Class & Seat Availability:</h6>
+                            <div class="row g-3">
+                                {% for cls_code, cls_info in item.classes.items() %}
+                                    {% set avail = cls_info.availability %}
+                                    
+                                    <div class="col-md-4 col-lg-3">
+                                        <div class="card class-pill h-100 p-3 bg-white shadow-xs">
+                                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                                <span class="fw-bold fs-5 text-dark">{{ cls_code }}</span>
+                                                <span class="fw-bold text-success">₹{{ cls_info.fare }}</span>
+                                            </div>
+
+                                            <div class="mb-3">
+                                                {% if avail.status == 'AVAILABLE' %}
+                                                    <span class="badge badge-cnf w-100 py-2 fs-6">{{ avail.display }}</span>
+                                                {% elif avail.status == 'RAC' %}
+                                                    <span class="badge badge-rac w-100 py-2 fs-6">{{ avail.display }}</span>
+                                                {% elif avail.status == 'WL' %}
+                                                    <span class="badge badge-wl w-100 py-2 fs-6">{{ avail.display }}</span>
+                                                {% else %}
+                                                    <span class="badge bg-secondary w-100 py-2 fs-6">{{ avail.display }}</span>
+                                                {% endif %}
+                                            </div>
+
+                                            {% if avail.status != 'NAV' %}
+                                                <a href="{{ url_for('user.book_form', train_id=train.id, from=from_st.code, to=to_st.code, date=journey_date, class=cls_code) }}" 
+                                                   class="btn btn-irctc-orange btn-sm w-100 mt-auto">
+                                                    Book Now
+                                                </a>
+                                            {% else %}
+                                                <button class="btn btn-secondary btn-sm w-100 mt-auto" disabled>Not Available</button>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

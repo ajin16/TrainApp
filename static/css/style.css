@@ -1,0 +1,100 @@
+/* IRCTC Custom Styling */
+
+:root {
+    --irctc-blue: #003366;
+    --irctc-dark-blue: #002244;
+    --irctc-orange: #F15A24;
+    --irctc-yellow: #FFB400;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color: #2b2b2b;
+}
+
+.navbar-irctc {
+    background: linear-gradient(135deg, var(--irctc-blue), var(--irctc-dark-blue));
+}
+
+.tracking-wide {
+    letter-spacing: 1px;
+}
+
+.hero-banner {
+    background: linear-gradient(rgba(0, 51, 102, 0.85), rgba(0, 34, 68, 0.9)), url('https://images.unsplash.com/photo-1474487548417-781cb71495f3?auto=format&fit=crop&w=1600&q=80') center/cover;
+    color: white;
+    padding: 3rem 0;
+    border-bottom: 4px solid var(--irctc-orange);
+}
+
+.card-search {
+    border-radius: 12px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+    border: none;
+}
+
+.bg-irctc-gradient {
+    background: linear-gradient(135deg, var(--irctc-blue), #004080);
+    color: white;
+}
+
+.btn-irctc-orange {
+    background-color: var(--irctc-orange);
+    color: white;
+    font-weight: 600;
+    border: none;
+}
+.btn-irctc-orange:hover {
+    background-color: #d84815;
+    color: white;
+}
+
+.class-pill {
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+}
+.class-pill:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.badge-cnf {
+    background-color: #198754;
+    color: white;
+}
+.badge-rac {
+    background-color: #fd7e14;
+    color: white;
+}
+.badge-wl {
+    background-color: #dc3545;
+    color: white;
+}
+
+.e-ticket-container {
+    border: 2px solid #003366;
+    border-radius: 8px;
+    background: white;
+    padding: 1.5rem;
+}
+.e-ticket-header {
+    background-color: #003366;
+    color: white;
+    padding: 1rem;
+    border-top-left-radius: 6px;
+    border-top-right-radius: 6px;
+}
+
+@media print {
+    .navbar, footer, .btn-print-hide, .alert {
+        display: none !important;
+    }
+    body {
+        background: white !important;
+    }
+    .e-ticket-container {
+        border: none !important;
+    }
+}

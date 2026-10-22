@@ -1,0 +1,86 @@
+{% extends 'base.html' %}
+
+{% block title %}System Bookings - Admin IRCTC{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h3 class="fw-bold mb-0 text-dark"><i class="fa-solid fa-list-check text-warning me-2"></i>Global Bookings Inventory</h3>
+            <p class="text-muted small mb-0">Search and monitor all system bookings across trains and dates</p>
+        </div>
+    </div>
+
+    <!-- Search / Filter Card -->
+    <div class="card shadow-sm border-0 mb-4 rounded-3 p-3">
+        <form method="GET" action="{{ url_for('admin.bookings_list') }}" class="row g-3">
+            <div class="col-md-6">
+                <input type="text" name="pnr" class="form-control" placeholder="Search by PNR..." value="{{ pnr_query }}">
+            </div>
+            <div class="col-md-4">
+                <select name="status" class="form-select">
+                    <option value="">All Booking Statuses</option>
+                    <option value="BOOKED" {% if status_filter == 'BOOKED' %}selected{% endif %}>BOOKED (Active)</option>
+                    <option value="PARTIALLY_CANCELLED" {% if status_filter == 'PARTIALLY_CANCELLED' %}selected{% endif %}>PARTIALLY_CANCELLED</option>
+                    <option value="CANCELLED" {% if status_filter == 'CANCELLED' %}selected{% endif %}>CANCELLED</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-primary w-100"><i class="fa-solid fa-filter me-1"></i> Filter</button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Bookings Table -->
+    <div class="card shadow-sm border-0 rounded-3">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>PNR</th>
+                            <th>Train</th>
+                            <th>User</th>
+                            <th>From $\rightarrow$ To</th>
+                            <th>Journey Date</th>
+                            <th>Class</th>
+                            <th>Total Fare</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for b in bookings %}
+                            <tr>
+                                <td class="fw-bold text-primary">{{ b.pnr }}</td>
+                                <td>{{ b.train.train_number }} - {{ b.train.name }}</td>
+                                <td>{{ b.user.username }}</td>
+                                <td><small>{{ b.from_station.code }} $\rightarrow$ {{ b.to_station.code }}</small></td>
+                                <td>{{ b.journey_date.strftime('%d-%b-%Y') }}</td>
+                                <td><span class="badge bg-secondary">{{ b.travel_class }} | {{ b.quota }}</span></td>
+                                <td class="fw-bold text-success">₹{{ "%.2f"|format(b.total_fare) }}</td>
+                                <td>
+                                    {% if b.status == 'BOOKED' %}
+                                        <span class="badge bg-success">BOOKED</span>
+                                    {% elif b.status == 'PARTIALLY_CANCELLED' %}
+                                        <span class="badge bg-warning text-dark">PARTIAL</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">CANCELLED</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <a href="{{ url_for('user.ticket_detail', booking_id=b.id) }}" class="btn btn-sm btn-outline-primary" target="_blank">
+                                        <i class="fa-solid fa-file-invoice"></i> Ticket
+                                    </a>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

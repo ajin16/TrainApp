@@ -1,0 +1,199 @@
+{% extends 'base.html' %}
+
+{% block title %}Electronic Reservation Slip (ERS) - PNR {{ summary.pnr }}{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+
+    <!-- Action Bar -->
+    <div class="d-flex justify-content-between align-items-center mb-3 btn-print-hide">
+        <a href="{{ url_for('user.my_bookings') }}" class="btn btn-outline-secondary btn-sm">
+            <i class="fa-solid fa-arrow-left me-1"></i> Back to My Bookings
+        </a>
+        <div>
+            <button onclick="window.print()" class="btn btn-primary btn-sm me-2">
+                <i class="fa-solid fa-print me-1"></i> Print / Download PDF
+            </button>
+            {% if summary.status != 'CANCELLED' and not summary.chart_prepared %}
+                <a href="{{ url_for('user.cancel_ticket_form', booking_id=summary.booking_id) }}" class="btn btn-danger btn-sm">
+                    <i class="fa-solid fa-ban me-1"></i> Cancel Ticket
+                </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Official IRCTC E-Ticket Container -->
+    <div class="e-ticket-container shadow-sm">
+        
+        <!-- Header -->
+        <div class="e-ticket-header d-flex justify-content-between align-items-center">
+            <div class="d-flex align-items-center">
+                <i class="fa-solid fa-train-subway fa-2xl text-warning me-3"></i>
+                <div>
+                    <h4 class="fw-bold mb-0 text-white">INDIAN RAILWAYS</h4>
+                    <span class="small text-warning">Electronic Reservation Slip (ERS)</span>
+                </div>
+            </div>
+            <div class="text-end">
+                <span class="d-block text-white fw-bold">IRCTC E-TICKET</span>
+                <small class="text-white-50">Booked Date: {{ summary.booking_date }}</small>
+            </div>
+        </div>
+
+        <!-- PNR & Key Trip Info Bar -->
+        <div class="row g-0 bg-light border-bottom p-3 text-center">
+            <div class="col-md-3 border-end">
+                <small class="text-muted d-block">PNR Number</small>
+                <span class="fs-4 fw-bold text-primary">{{ summary.pnr }}</span>
+            </div>
+            <div class="col-md-3 border-end">
+                <small class="text-muted d-block">Train No & Name</small>
+                <span class="fs-6 fw-bold text-dark">{{ summary.train_number }} / {{ summary.train_name }}</span>
+            </div>
+            <div class="col-md-3 border-end">
+                <small class="text-muted d-block">Class & Quota</small>
+                <span class="fs-6 fw-bold text-dark">{{ summary.travel_class }} | {{ summary.quota }}</span>
+            </div>
+            <div class="col-md-3">
+                <small class="text-muted d-block">Distance</small>
+                <span class="fs-6 fw-bold text-dark">{{ summary.distance_km }} KM</span>
+            </div>
+        </div>
+
+        <!-- Journey Route Details -->
+        <div class="row p-4 align-items-center">
+            <div class="col-md-5">
+                <div class="p-3 bg-light rounded-3 border">
+                    <small class="text-uppercase text-muted fw-semibold">From Station</small>
+                    <h5 class="fw-bold text-primary mb-1">{{ summary.from_station_name }} ({{ summary.from_station_code }})</h5>
+                    <div class="small">Departure: <strong>{{ summary.departure_time }}</strong></div>
+                    <div class="small">Date: <strong>{{ summary.journey_date }}</strong></div>
+                </div>
+            </div>
+            
+            <div class="col-md-2 text-center py-2">
+                <i class="fa-solid fa-arrow-right fa-2xl text-warning"></i>
+            </div>
+
+            <div class="col-md-5">
+                <div class="p-3 bg-light rounded-3 border text-end">
+                    <small class="text-uppercase text-muted fw-semibold">To Station</small>
+                    <h5 class="fw-bold text-primary mb-1">{{ summary.to_station_name }} ({{ summary.to_station_code }})</h5>
+                    <div class="small">Arrival: <strong>{{ summary.arrival_time }}</strong></div>
+                    <div class="small">Date: <strong>{{ summary.journey_date }}</strong></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Passenger Details Section -->
+        <div class="px-4 mb-4">
+            <h6 class="fw-bold text-dark border-bottom pb-2 mb-3">PASSENGER DETAILS & SEAT PREFERENCES</h6>
+            <div class="table-responsive mb-3">
+                <table class="table table-bordered align-middle text-center">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>S.No</th>
+                            <th>Passenger Name</th>
+                            <th>Age</th>
+                            <th>Gender</th>
+                            <th>Berth Preference</th>
+                            <th>Booking Status</th>
+                            <th>Current Status</th>
+                            <th>Coach / Seat</th>
+                            <th>Allocated Berth</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for p in summary.passengers %}
+                            <tr {% if p.is_cancelled %}class="table-secondary"{% endif %}>
+                                <td>{{ p.sno }}</td>
+                                <td class="fw-bold text-start">{{ p.name }}</td>
+                                <td>{{ p.age }}</td>
+                                <td>{{ p.gender }}</td>
+                                <td><span class="badge bg-light text-dark border">{{ p.berth_preference }}</span></td>
+                                <td><span class="badge {{ p.booking_badge.badge }}">{{ p.booking_status_text }}</span></td>
+                                <td><span class="badge {{ p.current_badge.badge }} fs-6">{{ p.current_status_text }}</span></td>
+                                <td class="fw-bold text-primary">{{ p.seat_display }}</td>
+                                <td>{{ p.berth_type }}</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Visual Coach Seat Map Section -->
+        <div class="px-4 mb-4">
+            <h6 class="fw-bold text-dark border-bottom pb-2 mb-3">
+                <i class="fa-solid fa-vector-square text-primary me-2"></i>VISUAL COACH SEAT MAP (SEAT VIEW)
+            </h6>
+            <div class="row g-3">
+                {% for p in summary.passengers %}
+                    {% if p.coach_bay %}
+                        <div class="col-md-6">
+                            <div class="card border shadow-xs rounded-3 bg-light">
+                                <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center py-2">
+                                    <span class="fw-bold small"><i class="fa-solid fa-user me-1 text-warning"></i> {{ p.name }}</span>
+                                    <span class="badge bg-primary">Coach {{ p.coach_no }} - Bay {{ p.coach_bay.bay_number }}</span>
+                                </div>
+                                <div class="card-body p-3">
+                                    <div class="small text-muted mb-2 text-center">
+                                        Coach Layout: <strong>{{ summary.travel_class }} Class</strong> | Seat Allocated: <strong class="text-success">{{ p.seat_no }} ({{ p.berth_type }})</strong>
+                                    </div>
+                                    <!-- Seat Grid Matrix -->
+                                    <div class="d-flex flex-wrap gap-2 justify-content-center">
+                                        {% for seat in p.coach_bay.layout %}
+                                            <div class="p-2 border rounded text-center {% if seat.is_allocated %}bg-success text-white fw-bold shadow-sm{% else %}bg-white text-muted{% endif %}" 
+                                                 style="min-width: 60px; min-height: 60px; font-size: 0.8rem;">
+                                                <div class="fw-bold">{{ seat.seat_no }}</div>
+                                                <div style="font-size: 0.75rem;">{{ seat.type }}</div>
+                                                {% if seat.is_allocated %}
+                                                    <i class="fa-solid fa-location-dot fa-xs text-warning mt-1"></i>
+                                                {% endif %}
+                                            </div>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Fare Breakdown & Barcode simulation -->
+        <div class="row px-4 pb-4 align-items-center">
+            <div class="col-md-6">
+                <div class="border p-3 rounded-3 bg-light">
+                    <h6 class="fw-bold mb-2 text-dark">PAYMENT BREAKDOWN</h6>
+                    <div class="d-flex justify-content-between small mb-1">
+                        <span>Total Ticket Fare:</span>
+                        <strong class="text-success fs-5">{{ summary.total_fare }}</strong>
+                    </div>
+                    <div class="d-flex justify-content-between small text-muted">
+                        <span>Payment Mode:</span>
+                        <span>IRCTC Online PG (Successful)</span>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6 text-center text-md-end mt-3 mt-md-0">
+                <div class="d-inline-block border p-2 bg-white rounded shadow-xs text-center" style="width: 140px;">
+                    <i class="fa-solid fa-qrcode fa-5x text-dark"></i>
+                    <div class="small text-muted mt-1" style="font-size: 0.65rem;">SCAN TO VERIFY PNR</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- IRCTC Terms & Conditions -->
+        <div class="bg-light p-3 border-top small text-muted">
+            <strong>Important Instructions:</strong>
+            <ol class="mb-0 ps-3">
+                <li>Valid identity proof (Aadhaar, Passport, Voter ID, Driving License) must be produced during journey.</li>
+                <li>E-ticket waitlisted passengers are NOT permitted to travel on train unless status changes to CNF/RAC prior to charting.</li>
+                <li>Cancellation charges apply as per Railway Rules 2026.</li>
+            </ol>
+        </div>
+
+    </div>
+</div>
+{% endblock %}

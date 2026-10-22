@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}IRCTC Indian Railways Train Booking{% endblock %}</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- FontAwesome 6 -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" rel="stylesheet">
+    <!-- Custom Style -->
+    <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
+</head>
+<body class="d-flex flex-column min-vh-100 bg-light">
+
+    <!-- Header Navbar -->
+    <nav class="navbar navbar-expand-lg sticky-top navbar-irctc shadow-sm">
+        <div class="container">
+            <a class="navbar-brand d-flex align-items-center" href="{{ url_for('user.index') }}">
+                <i class="fa-solid fa-train-subway fa-xl text-warning me-2"></i>
+                <div class="lh-1">
+                    <span class="fw-bold fs-4 text-white tracking-wide">IRCTC</span>
+                    <small class="d-block text-warning opacity-75" style="font-size: 0.75rem;">NextGen Booking Portal</small>
+                </div>
+            </a>
+            
+            <button class="navbar-toggler text-white border-light" type="button" data-bs-toggle="collapse" data-bs-target="#navMenu">
+                <span class="navbar-toggler-icon text-white"></span>
+            </button>
+
+            <div class="collapse navbar-collapse" id="navMenu">
+                <ul class="navbar-nav ms-auto mb-2 mb-lg-0 align-items-center">
+                    <li class="nav-item">
+                        <a class="nav-link active text-white" href="{{ url_for('user.index') }}">
+                            <i class="fa-solid fa-house me-1"></i> Home
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link text-white" href="{{ url_for('user.pnr_status') }}">
+                            <i class="fa-solid fa-magnifying-glass me-1"></i> PNR Status
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link text-white" href="{{ url_for('user.train_schedule') }}">
+                            <i class="fa-solid fa-clock me-1"></i> Train Schedule
+                        </a>
+                    </li>
+
+                    {% if session.get('user_id') %}
+                        <li class="nav-item">
+                            <a class="nav-link text-white" href="{{ url_for('user.my_bookings') }}">
+                                <i class="fa-solid fa-ticket me-1"></i> My Bookings
+                            </a>
+                        </li>
+                        {% if session.get('role') == 'admin' %}
+                            <li class="nav-item">
+                                <a class="nav-link text-warning fw-bold" href="{{ url_for('admin.dashboard') }}">
+                                    <i class="fa-solid fa-user-shield me-1"></i> Admin Panel
+                                </a>
+                            </li>
+                        {% endif %}
+                        <li class="nav-item ms-lg-2">
+                            <div class="dropdown">
+                                <button class="btn btn-outline-light btn-sm dropdown-toggle rounded-pill px-3" type="button" data-bs-toggle="dropdown">
+                                    <i class="fa-solid fa-user-circle me-1"></i> {{ session.get('username') }}
+                                </button>
+                                <ul class="dropdown-menu dropdown-menu-end shadow">
+                                    <li><span class="dropdown-item-text text-muted small"><i class="fa-solid fa-id-badge me-1"></i> Role: {{ session.get('role') | upper }}</span></li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li><a class="dropdown-item text-danger" href="{{ url_for('auth.logout') }}"><i class="fa-solid fa-right-from-bracket me-2"></i> Logout</a></li>
+                                </ul>
+                            </div>
+                        </li>
+                    {% else %}
+                        <li class="nav-item ms-lg-2">
+                            <a class="btn btn-outline-light btn-sm rounded-pill px-3 me-2" href="{{ url_for('auth.login') }}">
+                                <i class="fa-solid fa-right-to-bracket me-1"></i> Login
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="btn btn-warning btn-sm rounded-pill px-3 fw-semibold" href="{{ url_for('auth.register') }}">
+                                Register
+                            </a>
+                        </li>
+                    {% endif %}
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Global Flash Messages -->
+    <div class="container mt-3">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }} alert-dismissible fade show shadow-sm" role="alert">
+                        <i class="fa-solid fa-circle-info me-2"></i> {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+    </div>
+
+    <!-- Main Content Body -->
+    <main class="flex-grow-1">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-dark text-white py-4 mt-5">
+        <div class="container text-center text-md-start">
+            <div class="row gy-3">
+                <div class="col-md-6">
+                    <h6 class="text-warning fw-bold"><i class="fa-solid fa-train me-2"></i>IRCTC Indian Railways Simulation</h6>
+                    <p class="small text-muted mb-0">Full-featured reservation system with real-time CNF, RAC, Waiting List (WL) mechanics, automatic cancellation promotion, and reservation charting engine.</p>
+                </div>
+                <div class="col-md-3">
+                    <h6 class="text-light fw-semibold">Quick Links</h6>
+                    <ul class="list-unstyled small">
+                        <li><a href="{{ url_for('user.index') }}" class="text-muted text-decoration-none">Search Trains</a></li>
+                        <li><a href="{{ url_for('user.pnr_status') }}" class="text-muted text-decoration-none">PNR Enquiry</a></li>
+                        <li><a href="{{ url_for('auth.login') }}" class="text-muted text-decoration-none">Login / Register</a></li>
+                    </ul>
+                </div>
+                <div class="col-md-3">
+                    <h6 class="text-light fw-semibold">Support & Demo</h6>
+                    <p class="small text-muted mb-1">Test Admin: <code>admin</code> / <code>admin123</code></p>
+                    <p class="small text-muted mb-0">Test User: <code>passenger</code> / <code>user123</code></p>
+                </div>
+            </div>
+            <hr class="border-secondary my-3">
+            <div class="text-center small text-muted">
+                &copy; 2026 Indian Railway Catering and Tourism Corporation (IRCTC Clone) | Designed with Antigravity AI
+            </div>
+        </div>
+    </footer>
+
+    <!-- Bootstrap 5 Bundle JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>
