@@ -11,3 +11,15 @@ services:
         value: "3.12.2"
       - key: FLASK_DEBUG
         value: "0"
+      - key: MYSQL_HOST
+        sync: false
+      - key: MYSQL_PORT
+        sync: false
+      - key: MYSQL_USER
+        sync: false
+      - key: MYSQL_PASSWORD
+        sync: false
+      - key: MYSQL_DATABASE
+        sync: false
+      - key: MYSQL_SSL_DISABLED
+        value: "False"

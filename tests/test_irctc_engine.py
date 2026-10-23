@@ -9,8 +9,7 @@ from services.ticket_service import get_coach_bay_matrix, get_ticket_summary
 
 class TestIRCTCEngine(unittest.TestCase):
     def setUp(self):
-        self.app = create_app()
-        self.app.config['TESTING'] = True
+        self.app = create_app(testing=True)
         self.app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
         self.client = self.app.test_client()
         self.app_context = self.app.app_context()

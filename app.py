@@ -6,9 +6,11 @@ from routes.auth_routes import auth_bp
 from routes.user_routes import user_bp
 from routes.admin_routes import admin_bp
 
-def create_app():
+def create_app(testing=False):
     app = Flask(__name__)
     app.config.from_object(Config)
+    if testing:
+        app.config['TESTING'] = True
 
     db.init_app(app)
 
@@ -30,6 +32,11 @@ def create_app():
 
     with app.app_context():
         db.create_all()
+        # Safe idempotent startup initialization:
+        # Only seeds if database is completely uninitialized and not in test mode
+        if not app.config.get('TESTING') and os.environ.get('AUTO_SEED', '1') == '1':
+            from seed_data import seed_if_empty
+            seed_if_empty(app)
 
     return app
 

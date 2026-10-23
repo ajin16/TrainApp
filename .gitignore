@@ -35,6 +35,9 @@ build/
 
 # Environment variables
 .env
+.env.*
+.env*.local
+!.env.example
 .flaskenv
 
 # Logs
