@@ -9,13 +9,15 @@ from services.ticket_service import get_coach_bay_matrix, get_ticket_summary
 
 class TestIRCTCEngine(unittest.TestCase):
     def setUp(self):
-        self.app = create_app(testing=True)
-        self.app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
+        self.app = create_app(test_config={
+            'SQLALCHEMY_DATABASE_URI': 'sqlite:///:memory:',
+            'TESTING': True,
+            'WTF_CSRF_ENABLED': False
+        })
         self.client = self.app.test_client()
         self.app_context = self.app.app_context()
         self.app_context.push()
 
-        db.drop_all()
         db.create_all()
         self._seed_test_data()
 
@@ -143,6 +145,117 @@ class TestIRCTCEngine(unittest.TestCase):
         self.assertIn(b'Express Special', response.data)
         self.assertIn(b'New Delhi', response.data)
         self.assertIn(b'Prayagraj', response.data)
+
+    def test_14_day_advance_reservation_period(self):
+        # 1. Date within 14 days should succeed
+        valid_date = date.today() + timedelta(days=7)
+        success, b_valid = book_ticket(
+            self.user_id, self.train_id, self.s1_id, self.s3_id, valid_date, '3A', 'GN',
+            [{'name': 'Valid User', 'age': 30, 'gender': 'Male'}]
+        )
+        self.assertTrue(success)
+        self.assertIsNotNone(b_valid)
+
+        # 2. Date beyond 14 days (e.g. 15 days) should be rejected
+        future_date = date.today() + timedelta(days=15)
+        success_future, msg_future = book_ticket(
+            self.user_id, self.train_id, self.s1_id, self.s3_id, future_date, '3A', 'GN',
+            [{'name': 'Future User', 'age': 30, 'gender': 'Male'}]
+        )
+        self.assertFalse(success_future)
+        self.assertIn("Advance Reservation Period", msg_future)
+
+        # 3. Past date should be rejected
+        past_date = date.today() - timedelta(days=1)
+        success_past, msg_past = book_ticket(
+            self.user_id, self.train_id, self.s1_id, self.s3_id, past_date, '3A', 'GN',
+            [{'name': 'Past User', 'age': 30, 'gender': 'Male'}]
+        )
+        self.assertFalse(success_past)
+        self.assertIn("cannot be in the past", msg_past)
+
+    def test_tatkal_quota_rules(self):
+        from datetime import datetime, time
+        tomorrow = date.today() + timedelta(days=1)
+        day_after = date.today() + timedelta(days=2)
+
+        # 1. Tatkal booking for invalid date (not tomorrow) should be rejected
+        success_wrong_date, msg_wrong_date = book_ticket(
+            self.user_id, self.train_id, self.s1_id, self.s3_id, day_after, '3A', 'TQ',
+            [{'name': 'Tatkal User', 'age': 28, 'gender': 'Female'}],
+            server_now=datetime.combine(date.today(), time(10, 15, 0))
+        )
+        self.assertFalse(success_wrong_date)
+        self.assertIn("Tatkal bookings are strictly permitted ONLY for tomorrow's travel", msg_wrong_date)
+
+        # 2. Tatkal booking before 10:00 AM server time should be rejected
+        before_10am = datetime.combine(date.today(), time(9, 45, 0))
+        success_early, msg_early = book_ticket(
+            self.user_id, self.train_id, self.s1_id, self.s3_id, tomorrow, '3A', 'TQ',
+            [{'name': 'Early User', 'age': 28, 'gender': 'Female'}],
+            server_now=before_10am
+        )
+        self.assertFalse(success_early)
+        self.assertIn("Tatkal booking opens daily at exactly 10:00 AM", msg_early)
+
+        # 3. Tatkal booking at or after 10:00 AM for tomorrow should succeed with Tatkal surcharge
+        after_10am = datetime.combine(date.today(), time(10, 5, 0))
+        success_tatkal, b_tatkal = book_ticket(
+            self.user_id, self.train_id, self.s1_id, self.s3_id, tomorrow, '3A', 'TQ',
+            [{'name': 'Confirmed Tatkal', 'age': 28, 'gender': 'Female'}],
+            server_now=after_10am
+        )
+        self.assertTrue(success_tatkal)
+        self.assertEqual(b_tatkal.quota, 'TQ')
+        # Total fare must reflect Tatkal surcharge
+        fare_gn = calculate_fare(630.0, '3A', quota='GN')
+        fare_tq = calculate_fare(630.0, '3A', quota='TQ')
+        self.assertGreater(fare_tq['total_per_passenger'], fare_gn['total_per_passenger'])
+        self.assertGreater(fare_tq['tatkal_surcharge'], 0.0)
+
+    def test_5_day_transaction_retention_and_archiving(self):
+        from datetime import datetime
+        from services.booking_service import archive_or_purge_old_transactions
+
+        # Create recent booking (2 days old)
+        b_recent = Booking(
+            pnr='9999999991', user_id=self.user_id, train_id=self.train_id,
+            from_station_id=self.s1_id, to_station_id=self.s3_id,
+            journey_date=date.today() + timedelta(days=3), travel_class='3A', quota='GN',
+            total_fare=1500.0, status='BOOKED',
+            booking_time=datetime.utcnow() - timedelta(days=2),
+            is_archived=False
+        )
+
+        # Create older booking (7 days old, exceeding 5 days retention window)
+        b_old = Booking(
+            pnr='9999999992', user_id=self.user_id, train_id=self.train_id,
+            from_station_id=self.s1_id, to_station_id=self.s3_id,
+            journey_date=date.today() + timedelta(days=3), travel_class='3A', quota='GN',
+            total_fare=1500.0, status='BOOKED',
+            booking_time=datetime.utcnow() - timedelta(days=7),
+            is_archived=False
+        )
+
+        db.session.add_all([b_recent, b_old])
+        db.session.commit()
+
+        # Run retention archiving job (archive mode)
+        archived_count = archive_or_purge_old_transactions(retention_days=5, purge=False)
+        self.assertGreaterEqual(archived_count, 1)
+
+        db.session.refresh(b_recent)
+        db.session.refresh(b_old)
+
+        self.assertFalse(b_recent.is_archived)
+        self.assertTrue(b_old.is_archived)
+        self.assertIsNotNone(b_old.archived_at)
+
+        # Test purge mode
+        purged_count = archive_or_purge_old_transactions(retention_days=5, purge=True)
+        self.assertGreaterEqual(purged_count, 1)
+        self.assertIsNone(Booking.query.filter_by(pnr='9999999992').first())
+        self.assertIsNotNone(Booking.query.filter_by(pnr='9999999991').first())
 
 if __name__ == '__main__':
     unittest.main()

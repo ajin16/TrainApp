@@ -13,7 +13,8 @@ def is_database_seeded():
         has_stations = Station.query.first() is not None
         has_trains = Train.query.first() is not None
         has_admin = User.query.filter_by(role='admin').first() is not None
-        return has_stations and has_trains and has_admin
+        has_bookings = Booking.query.first() is not None
+        return has_stations and has_trains and has_admin and has_bookings
     except Exception as e:
         # If tables do not exist yet, treat as not seeded
         return False
@@ -25,7 +26,7 @@ def seed_if_empty(app=None):
     Never drops tables and never overwrites existing records.
     """
     if not is_database_seeded():
-        print("[Database Init] Empty database detected. Running initial safe seed...")
+        print("[Database Init] Empty or partially seeded database detected. Running initial safe seed...")
         return seed(app=app, force=False)
     else:
         print("[Database Init] Database already initialized. Skipping redundant seed.")
@@ -43,6 +44,12 @@ def seed(app=None, force=False):
 
     with app.app_context():
         if force:
+            db_uri = str(db.engine.url)
+            if 'sqlite' not in db_uri and os.getenv('ALLOW_DROP_ALL', 'false').lower() != 'true':
+                raise RuntimeError(
+                    "[SECURITY ALERT] Refusing to drop tables on remote/production database! "
+                    "Set ALLOW_DROP_ALL=true if you truly intend to wipe the remote database."
+                )
             print("[Database Init] FORCE mode active. Dropping and recreating all tables...")
             db.drop_all()
             db.create_all()
@@ -52,7 +59,8 @@ def seed(app=None, force=False):
                 st_count = Station.query.count()
                 tr_count = Train.query.count()
                 u_count = User.query.count()
-                print(f"[Database Init] Database already seeded ({st_count} stations, {tr_count} trains, {u_count} users).")
+                b_count = Booking.query.count()
+                print(f"[Database Init] Database already seeded ({st_count} stations, {tr_count} trains, {u_count} users, {b_count} bookings).")
                 print("[Database Init] Skipping seeding to protect existing user data and performance.")
                 return True
 
@@ -350,14 +358,14 @@ def seed(app=None, force=False):
         db.session.commit()
 
         print("--> Generating Realistic High-Occupancy Bookings on South Indian Routes (CNF, RAC, WL)...")
-        # Upcoming travel dates
+        # Upcoming travel dates strictly within the 14-day ARP booking window
+        base_today = date.today()
         upcoming_dates = [
-            date(2026, 10, 25),
-            date(2026, 10, 28),
-            date(2026, 11, 2),
-            date(2026, 11, 5),
-            date(2026, 11, 10),
-            date(2026, 11, 15)
+            base_today + timedelta(days=1),
+            base_today + timedelta(days=3),
+            base_today + timedelta(days=5),
+            base_today + timedelta(days=8),
+            base_today + timedelta(days=12)
         ]
 
         south_passengers = [

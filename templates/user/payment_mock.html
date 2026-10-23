@@ -1,47 +1,105 @@
 {% extends 'base.html' %}
 
-{% block title %}IRCTC Payment Gateway Simulation{% endblock %}
+{% block title %}Review & Payment - IRCTC NextGen eTicketing{% endblock %}
 
 {% block content %}
-<div class="container py-5">
+<div class="container py-4">
+
+    <!-- IRCTC Multi-Step Booking Progress Wizard -->
+    <div class="booking-steps-container">
+        <div class="row text-center">
+            <div class="col-3 booking-step step-complete justify-content-center">
+                <span class="step-circle"><i class="fa-solid fa-check"></i></span>
+                <span class="d-none d-md-inline">Select Train</span>
+            </div>
+            <div class="col-3 booking-step step-complete justify-content-center">
+                <span class="step-circle"><i class="fa-solid fa-check"></i></span>
+                <span class="d-none d-md-inline">Passenger Details</span>
+            </div>
+            <div class="col-3 booking-step step-active justify-content-center">
+                <span class="step-circle">3</span>
+                <span class="d-none d-md-inline">Payment Review</span>
+            </div>
+            <div class="col-3 booking-step justify-content-center">
+                <span class="step-circle">4</span>
+                <span class="d-none d-md-inline">Confirmation</span>
+            </div>
+        </div>
+    </div>
+
     <div class="row justify-content-center">
-        <div class="col-md-7">
-            <div class="card shadow-lg border-0 rounded-4">
+        <div class="col-lg-8">
+            <div class="card shadow-lg border-0 rounded-4 bg-white">
                 <div class="card-header bg-irctc-gradient text-white py-3 rounded-top-4 text-center">
-                    <i class="fa-solid fa-lock fa-2xl text-warning mb-2"></i>
-                    <h4 class="fw-bold mb-0">IRCTC Secure Payment Gateway</h4>
-                    <p class="small text-white-50 mb-0">Order Summary & Payment Method Selection</p>
+                    <div class="d-flex justify-content-center align-items-center mb-1">
+                        <i class="fa-solid fa-shield-halved fa-2xl text-warning me-2"></i>
+                        <h4 class="fw-bold mb-0">IRCTC Secure Payment Gateway</h4>
+                    </div>
+                    <p class="small text-white-50 mb-0">Order Summary & Electronic Payment Verification</p>
                 </div>
+                
                 <div class="card-body p-4">
                     
-                    <!-- Order Summary Box -->
+                    <!-- Train & Travel Summary -->
                     <div class="card bg-light border-0 p-3 mb-4 rounded-3">
                         <div class="row align-items-center">
-                            <div class="col-8">
-                                <h6 class="fw-bold mb-1 text-primary">{{ train.train_number }} - {{ train.name }}</h6>
-                                <p class="mb-0 small text-muted">
-                                    {{ from_st.code }} <i class="fa-solid fa-arrow-right mx-1"></i> {{ to_st.code }} | 
-                                    Class: <strong>{{ pending.travel_class }}</strong> | 
-                                    Passengers: <strong>{{ pending.passengers_data | length }}</strong>
-                                </p>
+                            <div class="col-md-8">
+                                <span class="badge bg-dark text-warning me-1">{{ train.train_number }}</span>
+                                <h5 class="d-inline fw-bold text-primary">{{ train.name }}</h5>
+                                <div class="small text-muted mt-2">
+                                    <strong>{{ from_st.name }} ({{ from_st.code }})</strong> 
+                                    <i class="fa-solid fa-arrow-right mx-1 text-warning"></i> 
+                                    <strong>{{ to_st.name }} ({{ to_st.code }})</strong>
+                                </div>
+                                <div class="small text-muted mt-1">
+                                    Date: <strong>{{ pending.journey_date }}</strong> | 
+                                    Class: <span class="badge bg-secondary">{{ pending.travel_class }}</span> | 
+                                    Quota: <span class="badge bg-warning text-dark">{{ pending.quota }}</span>
+                                </div>
                             </div>
-                            <div class="col-4 text-end">
-                                <span class="d-block small text-muted">Amount Payable</span>
-                                <span class="fs-4 fw-bold text-success">₹{{ "%.2f"|format(pending.total_fare) }}</span>
+                            <div class="col-md-4 text-md-end mt-2 mt-md-0">
+                                <span class="d-block small text-muted">Total Amount Payable:</span>
+                                <span class="fs-3 fw-bold text-success">₹{{ "%.2f"|format(pending.total_fare) }}</span>
                             </div>
                         </div>
                     </div>
 
+                    <!-- Passenger Review List -->
+                    <h6 class="fw-bold text-secondary mb-2"><i class="fa-solid fa-users me-1 text-primary"></i> Passengers Review:</h6>
+                    <div class="table-responsive mb-4">
+                        <table class="table table-bordered table-sm small align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>#</th>
+                                    <th>Passenger Name</th>
+                                    <th>Age / Gender</th>
+                                    <th>Berth Preference</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for p in pending.passengers_data %}
+                                    <tr>
+                                        <td>{{ loop.index }}</td>
+                                        <td class="fw-bold">{{ p.name }}</td>
+                                        <td>{{ p.age }} yrs / {{ p.gender }}</td>
+                                        <td><span class="badge bg-light text-dark border">{{ p.berth_preference }}</span></td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
                     <!-- Payment Option Tabs -->
-                    <ul class="nav nav-pills nav-fill mb-4" id="paymentTabs" role="tablist">
+                    <h6 class="fw-bold text-secondary mb-2"><i class="fa-solid fa-credit-card me-1 text-primary"></i> Select Payment Method:</h6>
+                    <ul class="nav nav-pills nav-fill mb-3" id="paymentTabs" role="tablist">
                         <li class="nav-item" role="presentation">
                             <button class="nav-link active fw-bold" id="upi-tab" data-bs-toggle="tab" data-bs-target="#upi" type="button" role="tab">
-                                <i class="fa-solid fa-qrcode me-1"></i> BHIM / UPI
+                                <i class="fa-solid fa-qrcode me-1"></i> BHIM / UPI (Instant)
                             </button>
                         </li>
                         <li class="nav-item" role="presentation">
                             <button class="nav-link fw-bold" id="card-tab" data-bs-toggle="tab" data-bs-target="#card" type="button" role="tab">
-                                <i class="fa-solid fa-credit-card me-1"></i> Card / NetBanking
+                                <i class="fa-solid fa-credit-card me-1"></i> Debit / Credit Card
                             </button>
                         </li>
                     </ul>
@@ -50,18 +108,20 @@
                         <div class="tab-content mb-4" id="paymentTabsContent">
                             
                             <!-- UPI Tab -->
-                            <div class="tab-pane fade show active text-center" id="upi" role="tabpanel">
-                                <div class="py-3">
-                                    <div class="mb-3">
-                                        <i class="fa-solid fa-building-columns fa-3x text-primary mb-2"></i>
-                                        <h6>Enter Virtual Payment Address (VPA) / UPI ID</h6>
+                            <div class="tab-pane fade show active text-center p-3 border rounded-3 bg-light" id="upi" role="tabpanel">
+                                <div class="py-2">
+                                    <i class="fa-solid fa-mobile-screen-button fa-2xl text-primary mb-2"></i>
+                                    <h6>Virtual Payment Address (VPA) / UPI ID</h6>
+                                    <div class="input-group w-75 mx-auto mt-2">
+                                        <input type="text" class="form-control text-center" placeholder="username@upi or mobile@paytm" value="passenger@okaxis" required>
+                                        <button class="btn btn-outline-secondary" type="button">Verify VPA</button>
                                     </div>
-                                    <input type="text" class="form-control text-center w-75 mx-auto py-2" placeholder="username@upi or username@paytm" value="passenger@okaxis" required>
+                                    <small class="text-muted d-block mt-2">Supports Google Pay, PhonePe, Paytm, BHIM</small>
                                 </div>
                             </div>
 
                             <!-- Card Tab -->
-                            <div class="tab-pane fade" id="card" role="tabpanel">
+                            <div class="tab-pane fade p-3 border rounded-3 bg-light" id="card" role="tabpanel">
                                 <div class="row g-3">
                                     <div class="col-12">
                                         <label class="form-label small fw-semibold">Cardholder Name</label>
@@ -89,8 +149,8 @@
                     </form>
 
                 </div>
-                <div class="card-footer bg-light text-center py-3 rounded-bottom-4 small text-muted">
-                    <i class="fa-solid fa-shield-halved text-success me-1"></i> 128-bit SSL Encrypted Mock Gateway
+                <div class="card-footer bg-light text-center py-3 rounded-bottom-4 small text-muted border-top">
+                    <i class="fa-solid fa-shield-halved text-success me-1"></i> 256-bit SSL Encrypted Sandbox Gateway | Transaction retained for 5 days
                 </div>
             </div>
         </div>

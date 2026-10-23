@@ -1,13 +1,24 @@
 {% extends 'base.html' %}
 
-{% block title %}IRCTC - Indian Railway Train Booking & PNR Enquiry{% endblock %}
+{% block title %}IRCTC - Indian Railway Train Booking & Tatkal Reservation{% endblock %}
 
 {% block content %}
 <!-- Hero Section -->
-<div class="hero-banner mb-4 text-center">
-    <div class="container">
-        <h1 class="display-5 fw-bold text-warning mb-2"><i class="fa-solid fa-train me-2"></i>INDIAN RAILWAYS</h1>
-        <p class="fs-5 opacity-90 mb-0">Safety | Security | Punctuality</p>
+<div class="hero-banner mb-4">
+    <div class="container text-center">
+        <h1 class="display-5 fw-bold text-warning mb-2">
+            <i class="fa-solid fa-train me-2"></i>INDIAN RAILWAYS
+        </h1>
+        <p class="fs-5 opacity-90 mb-3">Safety | Security | Punctuality | NextGen eTicketing</p>
+        <div class="d-inline-flex flex-wrap gap-2 justify-content-center">
+            <span class="badge arp-badge px-3 py-2 rounded-pill shadow-xs">
+                <i class="fa-solid fa-calendar-check me-1"></i> Advance Reservation Period (ARP): <strong>14 Days</strong> ({{ today_str }} to {{ max_date_str }})
+            </span>
+            <span class="badge {{ 'tatkal-badge-open' if is_tatkal_open else 'tatkal-badge-closed' }} px-3 py-2 rounded-pill shadow-xs">
+                <i class="fa-solid {{ 'fa-clock-rotate-left' if is_tatkal_open else 'fa-lock' }} me-1"></i>
+                Tatkal Quota: <strong>{{ 'OPEN (Started 10:00 AM)' if is_tatkal_open else 'OPENS 10:00 AM DAILY' }}</strong> (Next-Day Travel Only: {{ tomorrow_str }})
+            </span>
+        </div>
     </div>
 </div>
 
@@ -16,14 +27,19 @@
         <!-- Main Train Search Card -->
         <div class="col-lg-8">
             <div class="card card-search shadow border-0">
-                <div class="card-header bg-irctc-gradient text-white py-3 rounded-top-3">
-                    <h5 class="mb-0 fw-bold"><i class="fa-solid fa-ticket me-2"></i>BOOK TICKET</h5>
+                <div class="card-header bg-irctc-gradient text-white py-3 rounded-top-3 d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0 fw-bold"><i class="fa-solid fa-ticket me-2 text-warning"></i>BOOK TRAIN TICKET</h5>
+                    <span class="badge bg-warning text-dark px-2 py-1 small fw-semibold">14-Day ARP Active</span>
                 </div>
                 <div class="card-body p-4">
-                    <form action="{{ url_for('user.search') }}" method="GET">
+                    <form action="{{ url_for('user.search') }}" method="GET" id="trainSearchForm">
+                        
+                        <!-- Station Selection Row -->
                         <div class="row g-3 align-items-center mb-3">
                             <div class="col-md-5">
-                                <label class="form-label fw-semibold text-secondary">From Station</label>
+                                <label class="form-label fw-semibold text-secondary small">
+                                    <i class="fa-solid fa-location-dot text-primary me-1"></i> From Station
+                                </label>
                                 <select name="from_station" id="from_station" class="form-select form-select-lg" required>
                                     <option value="" disabled selected>Select Source Station</option>
                                     {% for st in stations %}
@@ -41,7 +57,9 @@
                             </div>
 
                             <div class="col-md-5">
-                                <label class="form-label fw-semibold text-secondary">To Station</label>
+                                <label class="form-label fw-semibold text-secondary small">
+                                    <i class="fa-solid fa-location-arrow text-danger me-1"></i> To Station
+                                </label>
                                 <select name="to_station" id="to_station" class="form-select form-select-lg" required>
                                     <option value="" disabled selected>Select Destination Station</option>
                                     {% for st in stations %}
@@ -53,20 +71,45 @@
                             </div>
                         </div>
 
-                        <div class="row g-3 align-items-center mb-4">
+                        <!-- Date and Quota Row -->
+                        <div class="row g-3 align-items-center mb-3">
                             <div class="col-md-6">
-                                <label class="form-label fw-semibold text-secondary">Date of Journey</label>
-                                <input type="date" name="journey_date" class="form-control form-select-lg" min="{{ today_str }}" value="{{ today_str }}" required>
+                                <label class="form-label fw-semibold text-secondary small">
+                                    <i class="fa-regular fa-calendar-days text-primary me-1"></i> Date of Journey 
+                                    <span class="text-muted fw-normal">(Max 14 Days)</span>
+                                </label>
+                                <input type="date" name="journey_date" id="journey_date" class="form-control form-control-lg" 
+                                       min="{{ today_str }}" max="{{ max_date_str }}" value="{{ today_str }}" required>
+                                <small class="text-muted d-block mt-1" style="font-size: 0.78rem;">
+                                    Booking window open until: <strong>{{ max_date_str }}</strong>
+                                </small>
                             </div>
+
                             <div class="col-md-6">
-                                <label class="form-label fw-semibold text-secondary">Quota</label>
-                                <select class="form-select form-select-lg">
+                                <label class="form-label fw-semibold text-secondary small">
+                                    <i class="fa-solid fa-users text-primary me-1"></i> Booking Quota
+                                </label>
+                                <select name="quota" id="quotaSelect" class="form-select form-select-lg">
                                     <option value="GN" selected>GENERAL (GN)</option>
-                                    <option value="TQ">TATKAL (TQ)</option>
+                                    <option value="TQ">TATKAL (TQ) - 10:00 AM (Next Day Only)</option>
                                     <option value="LD">LADIES (LD)</option>
-                                    <option value="SS">SENIOR CITIZEN (SS)</option>
+                                    <option value="SS">LOWER BERTH / SR. CITIZEN (SS)</option>
                                 </select>
+                                <small id="quotaHelp" class="text-muted d-block mt-1" style="font-size: 0.78rem;">
+                                    Normal bookings open up to 14 days in advance.
+                                </small>
                             </div>
+                        </div>
+
+                        <!-- Tatkal Notice Banner (Interactive) -->
+                        <div id="tatkalAlertBanner" class="alert {{ 'alert-success' if is_tatkal_open else 'alert-warning' }} d-none py-2 px-3 mb-3 small" role="alert">
+                            <i class="fa-solid fa-bolt me-1"></i>
+                            <strong>Tatkal Notice:</strong> 
+                            {% if is_tatkal_open %}
+                                Tatkal window is currently <strong>OPEN</strong>. Travel date is locked to tomorrow (<strong>{{ tomorrow_str }}</strong>).
+                            {% else %}
+                                Tatkal booking strictly opens at <strong>10:00 AM server time</strong> for tomorrow's date (<strong>{{ tomorrow_str }}</strong>).
+                            {% endif %}
                         </div>
 
                         <button type="submit" class="btn btn-irctc-orange btn-lg w-100 py-3 shadow">
@@ -74,51 +117,122 @@
                         </button>
                     </form>
                 </div>
+                <div class="card-footer bg-light py-2 px-4 border-top text-muted small d-flex justify-content-between align-items-center">
+                    <span><i class="fa-solid fa-shield-halved text-success me-1"></i> Safe & Instant Confirmation Engine</span>
+                    <span><i class="fa-solid fa-clock-rotate-left me-1"></i> Booking History retained for 5 days</span>
+                </div>
             </div>
         </div>
 
-        <!-- Right Sidebar: Quick PNR Enquiry & System Highlights -->
+        <!-- Right Sidebar: PNR Enquiry & System Highlights -->
         <div class="col-lg-4">
             <!-- PNR Status Quick Check Card -->
             <div class="card shadow-sm border-0 mb-4 rounded-3">
-                <div class="card-header bg-dark text-white fw-bold">
-                    <i class="fa-solid fa-magnifying-glass me-2 text-warning"></i> PNR ENQUIRY
+                <div class="card-header bg-irctc-gradient text-white fw-bold py-3">
+                    <i class="fa-solid fa-magnifying-glass me-2 text-warning"></i> PNR STATUS ENQUIRY
                 </div>
                 <div class="card-body p-3">
-                    <p class="small text-muted mb-2">Check current booking status (CNF, RAC, WL) by 10-digit PNR.</p>
+                    <p class="small text-muted mb-2">Check live reservation status (CNF, RAC, WL) by 10-digit PNR.</p>
                     <form action="{{ url_for('user.pnr_status') }}" method="GET">
                         <div class="input-group mb-2">
                             <input type="text" name="pnr" class="form-control" placeholder="Enter 10-digit PNR" maxlength="10" required>
-                            <button type="submit" class="btn btn-primary">Check</button>
+                            <button type="submit" class="btn btn-irctc-orange px-3">Check</button>
                         </div>
                     </form>
+                    <small class="text-muted" style="font-size: 0.75rem;">Sample PNRs available in test dataset.</small>
                 </div>
             </div>
 
             <!-- IRCTC Feature Matrix Card -->
             <div class="card shadow-sm border-0 rounded-3">
-                <div class="card-header bg-primary text-white fw-bold">
-                    <i class="fa-solid fa-shield-halved me-2"></i> KEY FEATURES
+                <div class="card-header bg-white border-bottom fw-bold text-dark py-3">
+                    <i class="fa-solid fa-circle-check text-success me-2"></i> IRCTC Core Engine Features
                 </div>
-                <ul class="list-group list-group-flush small">
-                    <li class="list-group-item d-flex align-items-center">
-                        <span class="badge bg-success me-2">CNF</span> Real-time Confirmed Berth Allocations
-                    </li>
-                    <li class="list-group-item d-flex align-items-center">
-                        <span class="badge bg-warning text-dark me-2">RAC</span> Reservation Against Cancellation
-                    </li>
-                    <li class="list-group-item d-flex align-items-center">
-                        <span class="badge bg-danger me-2">WL</span> Waiting List Mechanics
-                    </li>
-                    <li class="list-group-item d-flex align-items-center">
-                        <i class="fa-solid fa-arrows-rotate text-primary me-2"></i> Auto RAC $\rightarrow$ CNF Promotion Engine
-                    </li>
-                    <li class="list-group-item d-flex align-items-center">
-                        <i class="fa-solid fa-file-invoice text-success me-2"></i> Printable E-Ticket Generation
-                    </li>
-                </ul>
+                <div class="card-body p-3">
+                    <ul class="list-unstyled mb-0 small">
+                        <li class="mb-2 d-flex align-items-start">
+                            <i class="fa-solid fa-calendar-check text-primary me-2 mt-1"></i>
+                            <div>
+                                <strong>14-Day Advance Booking Window:</strong>
+                                <div class="text-muted">Tickets can be booked from today up to 14 days in advance.</div>
+                            </div>
+                        </li>
+                        <li class="mb-2 d-flex align-items-start">
+                            <i class="fa-solid fa-bolt text-warning me-2 mt-1"></i>
+                            <div>
+                                <strong>10:00 AM Tatkal Quota:</strong>
+                                <div class="text-muted">Opens daily at 10:00 AM server time for immediate next-day travel only.</div>
+                            </div>
+                        </li>
+                        <li class="mb-2 d-flex align-items-start">
+                            <i class="fa-solid fa-clock-rotate-left text-info me-2 mt-1"></i>
+                            <div>
+                                <strong>5-Day Transaction Retention:</strong>
+                                <div class="text-muted">Accessible user booking history is retained for 5 days from purchase date.</div>
+                            </div>
+                        </li>
+                        <li class="mb-2 d-flex align-items-start">
+                            <i class="fa-solid fa-arrow-up-right-dots text-success me-2 mt-1"></i>
+                            <div>
+                                <strong>Automated Cascade Promotion:</strong>
+                                <div class="text-muted">Cancelling CNF tickets automatically promotes RAC 1 $\rightarrow$ CNF and WL 1 $\rightarrow$ RAC.</div>
+                            </div>
+                        </li>
+                        <li class="d-flex align-items-start">
+                            <i class="fa-solid fa-database text-primary me-2 mt-1"></i>
+                            <div>
+                                <strong>Persistent Aiven MySQL & Alembic:</strong>
+                                <div class="text-muted">Safe schema migrations without database reset or data loss.</div>
+                            </div>
+                        </li>
+                    </ul>
+                </div>
             </div>
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const quotaSelect = document.getElementById('quotaSelect');
+        const dateInput = document.getElementById('journey_date');
+        const tatkalAlert = document.getElementById('tatkalAlertBanner');
+        const quotaHelp = document.getElementById('quotaHelp');
+        const tomorrowDate = "{{ tomorrow_str }}";
+        const todayDate = "{{ today_str }}";
+        const maxDate = "{{ max_date_str }}";
+
+        function updateQuotaState() {
+            if (quotaSelect.value === 'TQ') {
+                tatkalAlert.classList.remove('d-none');
+                quotaHelp.innerHTML = `<span class="text-danger fw-semibold">Tatkal quota strictly locks journey date to tomorrow (${tomorrowDate}).</span>`;
+                dateInput.value = tomorrowDate;
+                dateInput.min = tomorrowDate;
+                dateInput.max = tomorrowDate;
+            } else {
+                tatkalAlert.classList.add('d-none');
+                quotaHelp.innerText = 'Normal bookings open up to 14 days in advance.';
+                dateInput.min = todayDate;
+                dateInput.max = maxDate;
+            }
+        }
+
+        quotaSelect.addEventListener('change', updateQuotaState);
+        updateQuotaState();
+
+        // Swap button
+        const swapBtn = document.getElementById('swapStationsBtn');
+        const fromSelect = document.getElementById('from_station');
+        const toSelect = document.getElementById('to_station');
+        if (swapBtn && fromSelect && toSelect) {
+            swapBtn.addEventListener('click', function() {
+                const temp = fromSelect.value;
+                fromSelect.value = toSelect.value;
+                toSelect.value = temp;
+            });
+        }
+    });
+</script>
 {% endblock %}

@@ -1,9 +1,31 @@
 {% extends 'base.html' %}
 
-{% block title %}Book Train Ticket - IRCTC{% endblock %}
+{% block title %}Enter Passenger Details - IRCTC NextGen eTicketing{% endblock %}
 
 {% block content %}
 <div class="container py-4">
+
+    <!-- IRCTC Multi-Step Booking Progress Wizard -->
+    <div class="booking-steps-container">
+        <div class="row text-center">
+            <div class="col-3 booking-step step-complete justify-content-center">
+                <span class="step-circle"><i class="fa-solid fa-check"></i></span>
+                <span class="d-none d-md-inline">Select Train</span>
+            </div>
+            <div class="col-3 booking-step step-active justify-content-center">
+                <span class="step-circle">2</span>
+                <span class="d-none d-md-inline">Passenger Details</span>
+            </div>
+            <div class="col-3 booking-step justify-content-center">
+                <span class="step-circle">3</span>
+                <span class="d-none d-md-inline">Payment Review</span>
+            </div>
+            <div class="col-3 booking-step justify-content-center">
+                <span class="step-circle">4</span>
+                <span class="d-none d-md-inline">Confirmation</span>
+            </div>
+        </div>
+    </div>
 
     <!-- Train & Route Summary Header -->
     <div class="card bg-irctc-gradient text-white shadow-sm border-0 mb-4 rounded-3 p-3">
@@ -11,65 +33,96 @@
             <div class="col-md-8">
                 <span class="badge bg-warning text-dark fs-6 me-2">{{ train.train_number }}</span>
                 <h4 class="d-inline fw-bold text-white">{{ train.name }}</h4>
-                <p class="mb-0 small text-white-50 mt-1">
+                <div class="mt-2 small text-white-50">
                     <strong>{{ from_st.name }} ({{ from_st.code }})</strong> 
                     <i class="fa-solid fa-arrow-right mx-2 text-warning"></i> 
                     <strong>{{ to_st.name }} ({{ to_st.code }})</strong> | 
                     Date: <strong>{{ journey_date.strftime('%d-%b-%Y') }}</strong> | 
-                    Class: <span class="badge bg-light text-dark fw-bold">{{ travel_class }}</span>
-                </p>
+                    Class: <span class="badge bg-light text-dark fw-bold">{{ travel_class }}</span> |
+                    Quota: <span class="badge bg-warning text-dark fw-bold">{{ quota }}</span>
+                </div>
             </div>
             <div class="col-md-4 text-md-end mt-2 mt-md-0">
-                <span class="fs-5 fw-bold">Current Availability: </span>
+                <span class="small d-block text-white-50">Current Availability:</span>
                 {% if avail.status == 'AVAILABLE' %}
-                    <span class="badge badge-cnf fs-6">{{ avail.display }}</span>
+                    <span class="badge badge-cnf fs-6 py-2 px-3">{{ avail.display }}</span>
                 {% elif avail.status == 'RAC' %}
-                    <span class="badge badge-rac fs-6">{{ avail.display }}</span>
+                    <span class="badge badge-rac fs-6 py-2 px-3">{{ avail.display }}</span>
                 {% elif avail.status == 'WL' %}
-                    <span class="badge badge-wl fs-6">{{ avail.display }}</span>
+                    <span class="badge badge-wl fs-6 py-2 px-3">{{ avail.display }}</span>
                 {% else %}
-                    <span class="badge bg-secondary fs-6">{{ avail.display }}</span>
+                    <span class="badge bg-secondary fs-6 py-2 px-3">{{ avail.display }}</span>
                 {% endif %}
             </div>
         </div>
     </div>
 
-    <div class="row g-4">
-        <!-- Passenger Form Column -->
-        <div class="col-lg-8">
-            <form method="POST" id="bookingForm">
-                <div class="card shadow-sm border-0 rounded-3 mb-4">
-                    <div class="card-header bg-light d-flex justify-content-between align-items-center py-3">
-                        <h5 class="mb-0 fw-bold"><i class="fa-solid fa-users me-2 text-primary"></i>Passenger Details</h5>
+    <form method="POST" id="bookingForm">
+        <div class="row g-4">
+            <!-- Passenger Form Column -->
+            <div class="col-lg-8">
+                
+                <!-- Quota Selection Card -->
+                <div class="card shadow-sm border-0 rounded-3 mb-4 bg-white">
+                    <div class="card-header bg-light py-3 border-bottom d-flex justify-content-between align-items-center">
+                        <h6 class="mb-0 fw-bold text-dark"><i class="fa-solid fa-layer-group me-2 text-primary"></i>Selected Quota</h6>
+                        {% if quota == 'TQ' %}
+                            <span class="badge bg-warning text-dark fw-bold"><i class="fa-solid fa-bolt me-1"></i> Tatkal Quota Rules Apply</span>
+                        {% endif %}
+                    </div>
+                    <div class="card-body p-3">
+                        <div class="row align-items-center">
+                            <div class="col-md-6">
+                                <select name="quota" id="quotaSelect" class="form-select">
+                                    <option value="GN" {% if quota == 'GN' %}selected{% endif %}>General Quota (GN)</option>
+                                    <option value="TQ" {% if quota == 'TQ' %}selected{% endif %}>Tatkal Quota (TQ) - 10:00 AM (Next Day)</option>
+                                    <option value="LD" {% if quota == 'LD' %}selected{% endif %}>Ladies Quota (LD)</option>
+                                    <option value="SS" {% if quota == 'SS' %}selected{% endif %}>Senior Citizen / Lower Berth (SS)</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6 mt-2 mt-md-0">
+                                <small class="text-muted d-block" id="quotaNote">
+                                    {% if quota == 'TQ' %}
+                                        <span class="text-danger fw-semibold"><i class="fa-solid fa-triangle-exclamation me-1"></i>Tatkal opens daily at 10:00 AM for immediate next-day travel.</span>
+                                    {% else %}
+                                        Standard Advance Reservation Period (ARP) up to 14 days.
+                                    {% endif %}
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Passenger Details Input Card -->
+                <div class="card shadow-sm border-0 rounded-3 mb-4 bg-white">
+                    <div class="card-header bg-light d-flex justify-content-between align-items-center py-3 border-bottom">
+                        <h5 class="mb-0 fw-bold text-dark">
+                            <i class="fa-solid fa-users me-2 text-primary"></i>Passenger Details
+                        </h5>
                         <span class="badge bg-secondary">Total: <span id="passengerCountDisplay">1</span> / 6 Max</span>
                     </div>
                     <div class="card-body p-4">
-
-                        <div class="mb-3">
-                            <label class="form-label fw-semibold text-secondary">Select Quota</label>
-                            <select name="quota" class="form-select w-auto">
-                                <option value="GN" selected>General Quota (GN)</option>
-                                <option value="TQ">Tatkal Quota (TQ)</option>
-                                <option value="LD">Ladies Quota (LD)</option>
-                                <option value="SS">Senior Citizen / Lower Berth (SS)</option>
-                            </select>
-                        </div>
+                        
+                        <p class="small text-muted mb-3">
+                            <i class="fa-solid fa-circle-info text-primary me-1"></i>
+                            Senior citizens (Age 60+) are automatically prioritized for Lower berths. Please enter valid names as on Govt ID proof.
+                        </p>
 
                         <!-- Dynamic Passenger Rows Container -->
                         <div id="passengerRows">
-                            <div class="passenger-row card mb-3 border-light shadow-sm p-3 position-relative">
-                                <button type="button" class="btn-close position-absolute top-0 end-0 m-2 remove-passenger-btn" aria-label="Remove"></button>
+                            <div class="passenger-row card mb-3 border p-3 position-relative bg-light">
+                                <button type="button" class="btn-close position-absolute top-0 end-0 m-2 remove-passenger-btn" aria-label="Remove" style="display: none;"></button>
                                 <div class="row g-3">
                                     <div class="col-md-1 align-self-center text-center">
                                         <span class="badge bg-primary rounded-circle p-2">1</span>
                                     </div>
                                     <div class="col-md-4">
-                                        <label class="form-label small fw-semibold text-muted">Full Name</label>
+                                        <label class="form-label small fw-semibold text-muted">Full Name (As per Govt ID)</label>
                                         <input type="text" name="p_name[]" class="form-control" placeholder="Passenger Name" value="{{ session.get('full_name', '') }}" required>
                                     </div>
                                     <div class="col-md-2">
                                         <label class="form-label small fw-semibold text-muted">Age</label>
-                                        <input type="number" name="p_age[]" class="form-control" min="1" max="120" value="28" required>
+                                        <input type="number" name="p_age[]" class="form-control passenger-age-input" min="1" max="120" value="32" required>
                                     </div>
                                     <div class="col-md-2">
                                         <label class="form-label small fw-semibold text-muted">Gender</label>
@@ -88,58 +141,179 @@
                                             <option value="Upper">Upper</option>
                                             <option value="Side Lower">Side Lower</option>
                                             <option value="Side Upper">Side Upper</option>
+                                            <option value="Window">Window</option>
                                         </select>
                                     </div>
                                 </div>
                             </div>
                         </div>
 
-                        <button type="button" id="addPassengerBtn" class="btn btn-outline-primary rounded-pill px-4">
+                        <button type="button" id="addPassengerBtn" class="btn btn-outline-primary btn-sm rounded-pill px-3">
                             <i class="fa-solid fa-plus me-1"></i> Add Passenger
                         </button>
                     </div>
                 </div>
 
-                <button type="submit" class="btn btn-irctc-orange btn-lg w-100 py-3 rounded-3 shadow">
-                    <i class="fa-solid fa-credit-card me-2"></i> Proceed to Payment Gateway
-                </button>
-            </form>
-        </div>
+                <!-- Contact & IRCTC Travel Insurance Details -->
+                <div class="card shadow-sm border-0 rounded-3 mb-4 bg-white">
+                    <div class="card-header bg-light py-3 border-bottom">
+                        <h6 class="mb-0 fw-bold text-dark"><i class="fa-solid fa-address-book me-2 text-primary"></i>Contact Details & Preferences</h6>
+                    </div>
+                    <div class="card-body p-4">
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label small fw-semibold text-muted">Mobile Number (SMS alerts will be sent here)</label>
+                                <div class="input-group">
+                                    <span class="input-group-text bg-light">+91</span>
+                                    <input type="tel" name="mobile_number" class="form-control" value="{{ session.get('phone', '9840123456') }}" maxlength="10">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-semibold text-muted">Email Address (E-Ticket / ERS will be sent here)</label>
+                                <input type="email" name="email_address" class="form-control" value="{{ session.get('email', 'passenger@irctc.co.in') }}">
+                            </div>
+                        </div>
 
-        <!-- Fare Breakdown Sidebar -->
-        <div class="col-lg-4">
-            <div class="card shadow-sm border-0 rounded-3 sticky-top" style="top: 80px;">
-                <div class="card-header bg-dark text-white fw-bold py-3">
-                    <i class="fa-solid fa-receipt me-2 text-warning"></i> Fare Breakdown
-                </div>
-                <div class="card-body p-4">
-                    <div class="d-flex justify-content-between mb-2">
-                        <span class="text-muted">Base Fare per passenger</span>
-                        <span class="fw-semibold">₹{{ fare_info.base_fare }}</span>
-                    </div>
-                    <div class="d-flex justify-content-between mb-2">
-                        <span class="text-muted">Reservation Fee</span>
-                        <span class="fw-semibold">₹{{ fare_info.reservation_fee }}</span>
-                    </div>
-                    <div class="d-flex justify-content-between mb-2">
-                        <span class="text-muted">Superfast Charge</span>
-                        <span class="fw-semibold">₹{{ fare_info.superfast_charge }}</span>
-                    </div>
-                    <div class="d-flex justify-content-between mb-2">
-                        <span class="text-muted">GST (5% for AC)</span>
-                        <span class="fw-semibold">₹{{ fare_info.gst }}</span>
-                    </div>
-                    <hr>
-                    <div class="d-flex justify-content-between align-items-center">
-                        <span class="fw-bold fs-5 text-dark">Fare per Passenger</span>
-                        <span class="fw-bold fs-4 text-success">₹{{ fare_info.total_per_passenger }}</span>
+                        <div class="form-check p-3 bg-light rounded-3 border">
+                            <input class="form-check-input ms-0 me-2" type="checkbox" id="travelInsurance" name="travel_insurance" value="1" checked>
+                            <label class="form-check-label small" for="travelInsurance">
+                                <strong>Travel Insurance (₹0.45 per passenger):</strong> I opt for Indian Railway Travel Insurance Policy as per IRCTC terms.
+                            </label>
+                        </div>
                     </div>
                 </div>
-                <div class="card-footer bg-light p-3 small text-muted">
-                    <i class="fa-solid fa-circle-info me-1 text-primary"></i> Total payable will adjust automatically based on final passenger count during payment checkout.
+
+            </div>
+
+            <!-- Fare & Booking Summary Sidebar -->
+            <div class="col-lg-4">
+                <div class="card shadow-sm border-0 rounded-3 sticky-top" style="top: 85px;">
+                    <div class="card-header bg-irctc-gradient text-white py-3">
+                        <h5 class="mb-0 fw-bold"><i class="fa-solid fa-receipt me-2 text-warning"></i>Fare Summary</h5>
+                    </div>
+                    <div class="card-body p-4">
+                        
+                        <div class="d-flex justify-content-between mb-2 small">
+                            <span class="text-muted">Base Fare (Per Pax):</span>
+                            <span class="fw-semibold">₹{{ "%.2f"|format(fare_info.base_fare) }}</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-2 small">
+                            <span class="text-muted">Reservation Charge:</span>
+                            <span class="fw-semibold">₹{{ "%.2f"|format(fare_info.reservation_fee) }}</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-2 small">
+                            <span class="text-muted">Superfast Charge:</span>
+                            <span class="fw-semibold">₹{{ "%.2f"|format(fare_info.superfast_charge) }}</span>
+                        </div>
+                        {% if fare_info.tatkal_surcharge > 0 %}
+                            <div class="d-flex justify-content-between mb-2 small text-warning fw-bold">
+                                <span><i class="fa-solid fa-bolt me-1"></i> Tatkal Surcharge:</span>
+                                <span>₹{{ "%.2f"|format(fare_info.tatkal_surcharge) }}</span>
+                            </div>
+                        {% endif %}
+                        <div class="d-flex justify-content-between mb-2 small">
+                            <span class="text-muted">GST:</span>
+                            <span class="fw-semibold">₹{{ "%.2f"|format(fare_info.gst) }}</span>
+                        </div>
+
+                        <hr>
+
+                        <div class="d-flex justify-content-between mb-2">
+                            <span class="fw-semibold text-secondary">Fare Per Person:</span>
+                            <span class="fw-bold text-dark fs-5">₹<span id="farePerPax">{{ "%.2f"|format(fare_info.total_per_passenger) }}</span></span>
+                        </div>
+
+                        <div class="d-flex justify-content-between mb-3 text-success">
+                            <span class="fw-bold">Total Payable:</span>
+                            <span class="fw-bold fs-4">₹<span id="totalPayableDisplay">{{ "%.2f"|format(fare_info.total_per_passenger) }}</span></span>
+                        </div>
+
+                        <button type="submit" class="btn btn-irctc-orange btn-lg w-100 py-3 shadow">
+                            Proceed to Review & Pay <i class="fa-solid fa-arrow-right ms-2"></i>
+                        </button>
+
+                        <div class="text-center mt-3">
+                            <small class="text-muted d-block" style="font-size: 0.75rem;">
+                                <i class="fa-solid fa-lock text-success me-1"></i> SSL 256-bit Secure Gateway
+                            </small>
+                            <small class="text-muted d-block mt-1" style="font-size: 0.72rem;">
+                                Booking transaction will be retained in history for 5 days.
+                            </small>
+                        </div>
+
+                    </div>
                 </div>
             </div>
         </div>
-    </div>
+    </form>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const passengerRowsContainer = document.getElementById('passengerRows');
+        const addBtn = document.getElementById('addPassengerBtn');
+        const countDisplay = document.getElementById('passengerCountDisplay');
+        const totalPayableDisplay = document.getElementById('totalPayableDisplay');
+        const farePerPax = parseFloat("{{ fare_info.total_per_passenger }}");
+        const maxPassengers = 6;
+
+        function updatePassengerState() {
+            const rows = passengerRowsContainer.querySelectorAll('.passenger-row');
+            countDisplay.innerText = rows.length;
+
+            const total = (rows.length * farePerPax).toFixed(2);
+            totalPayableDisplay.innerText = total;
+
+            rows.forEach((row, idx) => {
+                const badge = row.querySelector('.badge');
+                if (badge) badge.innerText = idx + 1;
+                const removeBtn = row.querySelector('.remove-passenger-btn');
+                if (removeBtn) {
+                    removeBtn.style.display = rows.length > 1 ? 'block' : 'none';
+                }
+            });
+
+            if (rows.length >= maxPassengers) {
+                addBtn.disabled = true;
+                addBtn.innerText = 'Max 6 Passengers Reached';
+            } else {
+                addBtn.disabled = false;
+                addBtn.innerHTML = '<i class="fa-solid fa-plus me-1"></i> Add Passenger';
+            }
+        }
+
+        addBtn.addEventListener('click', function() {
+            const rows = passengerRowsContainer.querySelectorAll('.passenger-row');
+            if (rows.length >= maxPassengers) return;
+
+            const firstRow = rows[0];
+            const newRow = firstRow.cloneNode(true);
+            const inputs = newRow.querySelectorAll('input');
+            inputs.forEach(input => {
+                if (input.name === 'p_name[]') input.value = '';
+                if (input.name === 'p_age[]') input.value = '30';
+            });
+            passengerRowsContainer.appendChild(newRow);
+            attachRemoveHandlers();
+            updatePassengerState();
+        });
+
+        function attachRemoveHandlers() {
+            passengerRowsContainer.querySelectorAll('.remove-passenger-btn').forEach(btn => {
+                btn.onclick = function() {
+                    const row = this.closest('.passenger-row');
+                    if (passengerRowsContainer.querySelectorAll('.passenger-row').length > 1) {
+                        row.remove();
+                        updatePassengerState();
+                    }
+                };
+            });
+        }
+
+        attachRemoveHandlers();
+        updatePassengerState();
+    });
+</script>
 {% endblock %}

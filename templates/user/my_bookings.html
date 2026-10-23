@@ -1,42 +1,92 @@
 {% extends 'base.html' %}
 
-{% block title %}My Train Bookings - IRCTC{% endblock %}
+{% block title %}My Booking History - IRCTC NextGen eTicketing{% endblock %}
 
 {% block content %}
 <div class="container py-4">
 
-    <div class="d-flex justify-content-between align-items-center mb-4">
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
         <div>
-            <h3 class="fw-bold mb-1 text-dark"><i class="fa-solid fa-ticket text-warning me-2"></i>My Bookings History</h3>
-            <p class="text-muted small mb-0">View all active and past train ticket bookings</p>
+            <h3 class="fw-bold mb-1 text-dark">
+                <i class="fa-solid fa-folder-open text-warning me-2"></i>My Booking & Transaction History
+            </h3>
+            <p class="text-muted small mb-0">View your active reservations, PNR status, and archived transactions.</p>
         </div>
-        <a href="{{ url_for('user.index') }}" class="btn btn-irctc-orange btn-sm">
+        <a href="{{ url_for('user.index') }}" class="btn btn-irctc-orange btn-sm px-3 shadow-xs">
             <i class="fa-solid fa-plus me-1"></i> Book New Ticket
         </a>
     </div>
 
+    <!-- 5-Day Transaction Retention Policy Banner -->
+    <div class="alert alert-info border-0 shadow-sm d-flex align-items-start mb-4 rounded-3 py-3">
+        <i class="fa-solid fa-clock-rotate-left fa-xl me-3 mt-1 text-primary"></i>
+        <div>
+            <strong>IRCTC 5-Day Transaction Retention Policy:</strong>
+            <div class="small mt-1 text-secondary">
+                To guarantee high throughput and data integrity during peak booking windows, accessible user booking transactions are retained in active portal view for <strong>{{ retention_days }} days</strong> from the transaction date. Transactions older than 5 days are systematically archived.
+            </div>
+        </div>
+    </div>
+
+    <!-- Filter Tabs (Recent vs Archived vs All) -->
+    <ul class="nav nav-pills mb-4 bg-white p-2 rounded-3 shadow-xs border">
+        <li class="nav-item">
+            <a class="nav-link {{ 'active fw-bold' if filter_type == 'recent' else 'text-dark' }}" 
+               href="{{ url_for('user.my_bookings', filter='recent') }}">
+                <i class="fa-solid fa-circle-check me-1 {{ 'text-white' if filter_type == 'recent' else 'text-success' }}"></i>
+                Active Transactions (Last 5 Days)
+                <span class="badge {{ 'bg-light text-dark' if filter_type == 'recent' else 'bg-secondary' }} ms-1">{{ recent_count }}</span>
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link {{ 'active fw-bold' if filter_type == 'archived' else 'text-dark' }}" 
+               href="{{ url_for('user.my_bookings', filter='archived') }}">
+                <i class="fa-solid fa-box-archive me-1 {{ 'text-white' if filter_type == 'archived' else 'text-warning' }}"></i>
+                Archived Transactions (> 5 Days)
+                <span class="badge {{ 'bg-light text-dark' if filter_type == 'archived' else 'bg-secondary' }} ms-1">{{ archived_count }}</span>
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link {{ 'active fw-bold' if filter_type == 'all' else 'text-dark' }}" 
+               href="{{ url_for('user.my_bookings', filter='all') }}">
+                <i class="fa-solid fa-list me-1"></i>
+                All Transactions
+                <span class="badge {{ 'bg-light text-dark' if filter_type == 'all' else 'bg-secondary' }} ms-1">{{ total_count }}</span>
+            </a>
+        </li>
+    </ul>
+
     {% if not summaries %}
-        <div class="card shadow-sm border-0 text-center p-5">
+        <div class="card shadow-sm border-0 text-center p-5 bg-white rounded-3">
             <i class="fa-solid fa-ticket-simple fa-3x text-muted mb-3"></i>
-            <h5>No Bookings Found</h5>
-            <p class="text-muted small">You haven't booked any train tickets yet.</p>
+            <h5>No Bookings in {{ filter_type | capitalize }} View</h5>
+            <p class="text-muted small">
+                {% if filter_type == 'recent' %}
+                    No bookings found within the last 5 days.
+                {% elif filter_type == 'archived' %}
+                    No archived bookings older than 5 days found.
+                {% else %}
+                    You haven't made any train reservations yet.
+                {% endif %}
+            </p>
             <div>
-                <a href="{{ url_for('user.index') }}" class="btn btn-primary btn-sm">Search Trains Now</a>
+                <a href="{{ url_for('user.index') }}" class="btn btn-irctc-orange btn-sm px-4">Search & Book Trains</a>
             </div>
         </div>
     {% else %}
         <div class="row g-4">
             {% for b in summaries %}
                 <div class="col-12">
-                    <div class="card shadow-sm border-0 rounded-3">
-                        <div class="card-header bg-light d-flex justify-content-between align-items-center py-3">
+                    <div class="card shadow-sm border rounded-3 bg-white">
+                        <div class="card-header bg-light d-flex justify-content-between align-items-center py-3 border-bottom">
                             <div>
                                 <span class="badge bg-dark text-warning fs-6 me-2">PNR: {{ b.pnr }}</span>
                                 <span class="fw-bold fs-5 text-dark">{{ b.train_number }} - {{ b.train_name }}</span>
+                                <span class="badge bg-secondary ms-2 small">{{ b.travel_class }} | {{ b.quota }}</span>
                             </div>
-                            <div>
+                            <div class="d-flex align-items-center gap-2">
                                 {% if b.status == 'BOOKED' %}
-                                    <span class="badge bg-success fs-6"><i class="fa-solid fa-check me-1"></i> Active</span>
+                                    <span class="badge bg-success fs-6"><i class="fa-solid fa-check me-1"></i> Confirmed</span>
                                 {% elif b.status == 'PARTIALLY_CANCELLED' %}
                                     <span class="badge bg-warning text-dark fs-6"><i class="fa-solid fa-triangle-exclamation me-1"></i> Partially Cancelled</span>
                                 {% else %}
@@ -48,49 +98,64 @@
                         <div class="card-body p-4">
                             <div class="row align-items-center mb-3">
                                 <div class="col-md-3">
-                                    <small class="text-muted d-block">From</small>
+                                    <small class="text-muted d-block">Origin Station</small>
                                     <strong class="text-dark">{{ b.from_station_name }} ({{ b.from_station_code }})</strong>
                                     <div class="small text-primary">Dep: {{ b.departure_time }}</div>
                                 </div>
                                 <div class="col-md-3">
-                                    <small class="text-muted d-block">To</small>
+                                    <small class="text-muted d-block">Destination Station</small>
                                     <strong class="text-dark">{{ b.to_station_name }} ({{ b.to_station_code }})</strong>
                                     <div class="small text-primary">Arr: {{ b.arrival_time }}</div>
                                 </div>
                                 <div class="col-md-3">
                                     <small class="text-muted d-block">Journey Date</small>
                                     <strong class="text-dark">{{ b.journey_date }}</strong>
+                                    <div class="small text-muted">Booked: {{ b.booking_time }}</div>
                                 </div>
                                 <div class="col-md-3 text-md-end">
                                     <small class="text-muted d-block">Total Fare</small>
-                                    <span class="fs-5 fw-bold text-success">{{ b.total_fare }}</span>
+                                    <span class="fs-4 fw-bold text-success">{{ b.total_fare }}</span>
                                 </div>
                             </div>
 
                             <!-- Passenger Summary List -->
-                            <div class="bg-light p-3 rounded-3 mb-3">
-                                <small class="fw-bold text-secondary d-block mb-2">Passengers:</small>
+                            <div class="bg-light p-3 rounded-3 mb-3 border">
+                                <small class="fw-bold text-secondary d-block mb-2">
+                                    <i class="fa-solid fa-users me-1 text-primary"></i> Passengers Status:
+                                </small>
                                 <div class="d-flex flex-wrap gap-2">
                                     {% for p in b.passengers %}
-                                        <span class="badge bg-white text-dark border p-2">
-                                            {{ p.name }} ({{ p.age }}/{{ p.gender }}) - 
+                                        <span class="badge bg-white text-dark border p-2 shadow-xs">
+                                            <strong>{{ p.name }}</strong> ({{ p.age }}/{{ p.gender }}) - 
                                             <span class="badge {{ p.current_badge.badge }}">{{ p.current_status_text }}</span>
-                                            {% if p.seat_display != 'N/A' %} [{{ p.seat_display }}]{% endif %}
+                                            {% if p.seat_display != 'N/A' %}
+                                                <span class="text-primary fw-bold ms-1">[{{ p.seat_display }}]</span>
+                                            {% endif %}
                                         </span>
                                     {% endfor %}
                                 </div>
                             </div>
 
-                            <div class="d-flex justify-content-end gap-2">
-                                <a href="{{ url_for('user.ticket_detail', booking_id=b.booking_id) }}" class="btn btn-outline-primary btn-sm">
-                                    <i class="fa-solid fa-file-invoice me-1"></i> View / Print E-Ticket
-                                </a>
-                                {% if b.status != 'CANCELLED' and not b.chart_prepared %}
-                                    <a href="{{ url_for('user.cancel_ticket_form', booking_id=b.booking_id) }}" class="btn btn-outline-danger btn-sm">
-                                        <i class="fa-solid fa-ban me-1"></i> Cancel Passengers
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div class="small text-muted">
+                                    {% if b.chart_prepared %}
+                                        <span class="badge bg-primary"><i class="fa-solid fa-lock me-1"></i> Chart Prepared</span>
+                                    {% else %}
+                                        <span class="badge bg-light text-secondary border">Chart Not Prepared</span>
+                                    {% endif %}
+                                </div>
+                                <div class="d-flex gap-2">
+                                    <a href="{{ url_for('user.ticket_detail', booking_id=b.booking_id) }}" class="btn btn-outline-primary btn-sm px-3">
+                                        <i class="fa-solid fa-file-invoice me-1"></i> View E-Ticket
                                     </a>
-                                {% endif %}
+                                    {% if b.status != 'CANCELLED' and not b.chart_prepared %}
+                                        <a href="{{ url_for('user.cancel_ticket_form', booking_id=b.booking_id) }}" class="btn btn-outline-danger btn-sm px-3">
+                                            <i class="fa-solid fa-ban me-1"></i> Cancel
+                                        </a>
+                                    {% endif %}
+                                </div>
                             </div>
+
                         </div>
                     </div>
                 </div>

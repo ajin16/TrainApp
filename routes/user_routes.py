@@ -1,7 +1,16 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session, jsonify
-from datetime import datetime, date
+from datetime import datetime, date, timedelta, time
 from models import db, Station, Train, Booking, Passenger
-from services.booking_service import search_trains, get_class_availability, calculate_fare, book_ticket
+from services.booking_service import (
+    search_trains,
+    get_class_availability,
+    calculate_fare,
+    book_ticket,
+    validate_advance_reservation_period,
+    validate_tatkal_eligibility,
+    archive_or_purge_old_transactions,
+    MAX_ADVANCE_BOOKING_DAYS
+)
 from services.cancellation_service import cancel_passengers, calculate_cancellation_refund
 from services.ticket_service import get_ticket_summary
 
@@ -20,14 +29,27 @@ def login_required(f):
 @user_bp.route('/')
 def index():
     stations = Station.query.order_by(Station.name).all()
-    today_str = date.today().strftime('%Y-%m-%d')
-    return render_template('user/index.html', stations=stations, today_str=today_str)
+    today = date.today()
+    today_str = today.strftime('%Y-%m-%d')
+    max_date_str = (today + timedelta(days=MAX_ADVANCE_BOOKING_DAYS)).strftime('%Y-%m-%d')
+    tomorrow_str = (today + timedelta(days=1)).strftime('%Y-%m-%d')
+    is_tatkal_open = datetime.now().time() >= time(10, 0)
+    return render_template(
+        'user/index.html',
+        stations=stations,
+        today_str=today_str,
+        max_date_str=max_date_str,
+        tomorrow_str=tomorrow_str,
+        is_tatkal_open=is_tatkal_open,
+        arp_days=MAX_ADVANCE_BOOKING_DAYS
+    )
 
 @user_bp.route('/search', methods=['GET'])
 def search():
     from_code = request.args.get('from_station', '').strip()
     to_code = request.args.get('to_station', '').strip()
     journey_date_str = request.args.get('journey_date', '').strip()
+    quota = request.args.get('quota', 'GN').strip()
     
     if not from_code or not to_code or not journey_date_str:
         flash("Please select Source, Destination, and Journey Date.", "warning")
@@ -39,12 +61,25 @@ def search():
         flash("Invalid date format.", "danger")
         return redirect(url_for('user.index'))
 
-    if journey_date < date.today():
-        flash("Journey date cannot be in the past.", "warning")
+    # 1. Enforce 14-Day Advance Reservation Period (ARP)
+    is_arp_valid, arp_err = validate_advance_reservation_period(journey_date)
+    if not is_arp_valid:
+        flash(arp_err, "warning")
         return redirect(url_for('user.index'))
 
-    results, from_st, to_st = search_trains(from_code, to_code, journey_date)
+    # 2. Check Tatkal Quota Rules if TQ selected
+    tatkal_warning = None
+    if quota == 'TQ':
+        is_tatkal_valid, tatkal_err = validate_tatkal_eligibility(journey_date, quota)
+        if not is_tatkal_valid:
+            tatkal_warning = tatkal_err
+            flash(tatkal_err, "warning")
+
+    results, from_st, to_st = search_trains(from_code, to_code, journey_date, quota=quota)
     stations = Station.query.order_by(Station.name).all()
+
+    today = date.today()
+    max_date_str = (today + timedelta(days=MAX_ADVANCE_BOOKING_DAYS)).strftime('%Y-%m-%d')
 
     return render_template(
         'user/search_results.html',
@@ -52,7 +87,11 @@ def search():
         from_st=from_st,
         to_st=to_st,
         journey_date=journey_date_str,
-        stations=stations
+        journey_date_obj=journey_date,
+        quota=quota,
+        stations=stations,
+        tatkal_warning=tatkal_warning,
+        max_date_str=max_date_str
     )
 
 @user_bp.route('/book/<int:train_id>', methods=['GET', 'POST'])
@@ -62,6 +101,7 @@ def book_form(train_id):
     to_code = request.args.get('to', '')
     j_date_str = request.args.get('date', '')
     travel_class = request.args.get('class', 'SL')
+    quota = request.args.get('quota', 'GN')
 
     train = Train.query.get_or_404(train_id)
     from_st = Station.query.filter_by(code=from_code).first_or_404()
@@ -73,6 +113,12 @@ def book_form(train_id):
         flash("Invalid journey date.", "danger")
         return redirect(url_for('user.index'))
 
+    # Validate 14-day ARP window
+    is_arp_valid, arp_err = validate_advance_reservation_period(journey_date)
+    if not is_arp_valid:
+        flash(arp_err, "danger")
+        return redirect(url_for('user.search', from_station=from_code, to_station=to_code, journey_date=date.today().strftime('%Y-%m-%d')))
+
     avail = get_class_availability(train_id, journey_date, travel_class)
     
     # Calculate distance
@@ -83,14 +129,25 @@ def book_form(train_id):
         elif r.station_id == to_st.id: dst_r = r
     distance = dst_r.distance_km - src_r.distance_km if (src_r and dst_r) else 100.0
 
-    fare_info = calculate_fare(distance, travel_class, quota='GN')
+    fare_info = calculate_fare(distance, travel_class, quota=quota)
 
     if request.method == 'POST':
-        quota = request.form.get('quota', 'GN')
+        selected_quota = request.form.get('quota', quota)
         names = request.form.getlist('p_name[]')
         ages = request.form.getlist('p_age[]')
         genders = request.form.getlist('p_gender[]')
         berths = request.form.getlist('p_berth[]')
+
+        # Strictly validate Tatkal rules if Tatkal quota chosen
+        if selected_quota == 'TQ':
+            is_tatkal_valid, tatkal_err = validate_tatkal_eligibility(journey_date, selected_quota)
+            if not is_tatkal_valid:
+                flash(tatkal_err, "danger")
+                return render_template(
+                    'user/book_ticket.html',
+                    train=train, from_st=from_st, to_st=to_st, journey_date=journey_date,
+                    travel_class=travel_class, quota=selected_quota, avail=avail, fare_info=fare_info, distance=distance
+                )
 
         passengers_data = []
         for i in range(len(names)):
@@ -104,7 +161,14 @@ def book_form(train_id):
 
         if not passengers_data:
             flash("Please add at least one passenger.", "warning")
-            return render_template('user/book_ticket.html', train=train, from_st=from_st, to_st=to_st, journey_date=journey_date, travel_class=travel_class, avail=avail, fare_info=fare_info, distance=distance)
+            return render_template(
+                'user/book_ticket.html',
+                train=train, from_st=from_st, to_st=to_st, journey_date=journey_date,
+                travel_class=travel_class, quota=selected_quota, avail=avail, fare_info=fare_info, distance=distance
+            )
+
+        # Recalculate fare for the final selected quota
+        final_fare_info = calculate_fare(distance, travel_class, quota=selected_quota)
 
         # Store booking data in session and redirect to payment gateway simulation
         session['pending_booking'] = {
@@ -113,9 +177,11 @@ def book_form(train_id):
             'to_station_id': to_st.id,
             'journey_date': j_date_str,
             'travel_class': travel_class,
-            'quota': quota,
+            'quota': selected_quota,
             'passengers_data': passengers_data,
-            'total_fare': fare_info['total_per_passenger'] * len(passengers_data)
+            'distance': distance,
+            'fare_info': final_fare_info,
+            'total_fare': final_fare_info['total_per_passenger'] * len(passengers_data)
         }
         return redirect(url_for('user.payment_mock'))
 
@@ -126,6 +192,7 @@ def book_form(train_id):
         to_st=to_st,
         journey_date=journey_date,
         travel_class=travel_class,
+        quota=quota,
         avail=avail,
         fare_info=fare_info,
         distance=distance
@@ -144,7 +211,7 @@ def payment_mock():
     to_st = Station.query.get(pending['to_station_id'])
 
     if request.method == 'POST':
-        # Process booking
+        # Process booking with full validations (ARP and Tatkal)
         j_date = datetime.strptime(pending['journey_date'], '%Y-%m-%d').date()
         success, res = book_ticket(
             user_id=session['user_id'],
@@ -154,7 +221,8 @@ def payment_mock():
             journey_date=j_date,
             travel_class=pending['travel_class'],
             quota=pending['quota'],
-            passengers_data=pending['passengers_data']
+            passengers_data=pending['passengers_data'],
+            server_now=datetime.now()
         )
 
         session.pop('pending_booking', None)
@@ -186,9 +254,50 @@ def pnr_status():
 @user_bp.route('/my-bookings')
 @login_required
 def my_bookings():
-    bookings = Booking.query.filter_by(user_id=session['user_id']).order_by(Booking.booking_time.desc()).all()
+    # 5-Day Transaction Retention Policy:
+    # 1. Run automatic background archiving for any records older than 5 days
+    archive_or_purge_old_transactions(retention_days=5, purge=False)
+
+    filter_type = request.args.get('filter', 'recent').strip().lower()
+    cutoff_5_days = datetime.utcnow() - timedelta(days=5)
+
+    base_query = Booking.query.filter_by(user_id=session['user_id'])
+    
+    # Calculate counts for tabs
+    recent_count = base_query.filter(
+        Booking.is_archived == False,
+        Booking.booking_time >= cutoff_5_days
+    ).count()
+
+    archived_count = base_query.filter(
+        (Booking.is_archived == True) | (Booking.booking_time < cutoff_5_days)
+    ).count()
+
+    total_count = base_query.count()
+
+    if filter_type == 'archived':
+        bookings = base_query.filter(
+            (Booking.is_archived == True) | (Booking.booking_time < cutoff_5_days)
+        ).order_by(Booking.booking_time.desc()).all()
+    elif filter_type == 'all':
+        bookings = base_query.order_by(Booking.booking_time.desc()).all()
+    else:  # 'recent' default (<= 5 days)
+        filter_type = 'recent'
+        bookings = base_query.filter(
+            Booking.is_archived == False,
+            Booking.booking_time >= cutoff_5_days
+        ).order_by(Booking.booking_time.desc()).all()
+
     summaries = [get_ticket_summary(b) for b in bookings]
-    return render_template('user/my_bookings.html', summaries=summaries)
+    return render_template(
+        'user/my_bookings.html',
+        summaries=summaries,
+        filter_type=filter_type,
+        recent_count=recent_count,
+        archived_count=archived_count,
+        total_count=total_count,
+        retention_days=5
+    )
 
 @user_bp.route('/ticket/<int:booking_id>')
 @login_required

@@ -102,6 +102,8 @@ class Booking(db.Model):
     booking_time = db.Column(db.DateTime, default=datetime.utcnow)
     status = db.Column(db.String(30), default='BOOKED')  # BOOKED, CANCELLED, PARTIALLY_CANCELLED
     chart_prepared = db.Column(db.Boolean, default=False)
+    is_archived = db.Column(db.Boolean, default=False, nullable=False)
+    archived_at = db.Column(db.DateTime, nullable=True)
 
     from_station = db.relationship('Station', foreign_keys=[from_station_id])
     to_station = db.relationship('Station', foreign_keys=[to_station_id])

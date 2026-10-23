@@ -1,6 +1,6 @@
 import random
 import string
-from datetime import datetime
+from datetime import datetime, date, timedelta, time
 from models import db, Train, RouteStation, Station, CoachQuotaConfig, Booking, Passenger
 
 BERTH_TYPES_SLEEPER_3AC = ['Lower', 'Middle', 'Upper', 'Lower', 'Middle', 'Upper', 'Side Lower', 'Side Upper']
@@ -15,6 +15,89 @@ COACH_PREFIXES = {
     'CC': 'C',
     '2S': 'D'
 }
+
+# 14-Day Advance Reservation Period (ARP) Constant
+MAX_ADVANCE_BOOKING_DAYS = 14
+TATKAL_OPEN_TIME = time(10, 0, 0)  # 10:00 AM server time
+
+def validate_advance_reservation_period(journey_date, max_days=MAX_ADVANCE_BOOKING_DAYS):
+    """
+    Validate that the journey date is within the allowed 14-day booking window.
+    Returns (is_valid: bool, error_msg: str | None).
+    """
+    today = date.today()
+    max_date = today + timedelta(days=max_days)
+
+    if journey_date < today:
+        return False, f"Journey date ({journey_date.strftime('%d-%b-%Y')}) cannot be in the past."
+
+    if journey_date > max_date:
+        return False, (
+            f"Advance Reservation Period (ARP) violation: Bookings are restricted up to {max_days} days in advance. "
+            f"Allowed booking range: {today.strftime('%d-%b-%Y')} to {max_date.strftime('%d-%b-%Y')}."
+        )
+
+    return True, None
+
+def validate_tatkal_eligibility(journey_date, quota, server_now=None):
+    """
+    Validate Tatkal booking constraints:
+    1. Quota is TQ.
+    2. Opens daily at exactly 10:00 AM local server time.
+    3. Strictly allows ticket booking ONLY for the immediate next day (today + 1 day).
+    Returns (is_valid: bool, error_msg: str | None).
+    """
+    if quota != 'TQ':
+        return True, None
+
+    if server_now is None:
+        server_now = datetime.now()
+
+    today = date.today()
+    tomorrow = today + timedelta(days=1)
+
+    # Date constraint: strictly immediate next day
+    if journey_date != tomorrow:
+        return False, (
+            f"Tatkal quota restriction: Tatkal bookings are strictly permitted ONLY for tomorrow's travel "
+            f"({tomorrow.strftime('%d-%b-%Y')}). Selected date: {journey_date.strftime('%d-%b-%Y')} is not eligible for Tatkal."
+        )
+
+    # Time constraint: opens at exactly 10:00 AM server time
+    if server_now.time() < TATKAL_OPEN_TIME:
+        return False, (
+            f"Tatkal booking opens daily at exactly 10:00 AM local server time. "
+            f"Current server time is {server_now.strftime('%I:%M:%S %p')}. Tatkal booking window is currently CLOSED."
+        )
+
+    return True, None
+
+def archive_or_purge_old_transactions(retention_days=5, purge=False):
+    """
+    5-Day Transaction Retention Policy:
+    Archives or permanently purges booking transaction records older than retention_days.
+    Returns count of affected records.
+    """
+    cutoff = datetime.utcnow() - timedelta(days=retention_days)
+    if purge:
+        old_bookings = Booking.query.filter(Booking.booking_time < cutoff).all()
+        count = len(old_bookings)
+        for b in old_bookings:
+            db.session.delete(b)
+        db.session.commit()
+        return count
+    else:
+        old_bookings = Booking.query.filter(
+            Booking.booking_time < cutoff,
+            Booking.is_archived == False
+        ).all()
+        count = len(old_bookings)
+        now = datetime.utcnow()
+        for b in old_bookings:
+            b.is_archived = True
+            b.archived_at = now
+        db.session.commit()
+        return count
 
 def generate_pnr():
     """Generate a unique 10-digit PNR string."""
@@ -48,7 +131,14 @@ def calculate_fare(distance_km, travel_class, quota='GN'):
     
     tatkal_surcharge = 0.0
     if quota == 'TQ':
-        tatkal_surcharge = round(subtotal * 0.20, 2)
+        if travel_class in ['1A', '2A']:
+            tatkal_surcharge = max(400.0, round(base_fare * 0.30, 2))
+        elif travel_class in ['3A', 'CC']:
+            tatkal_surcharge = max(300.0, round(base_fare * 0.30, 2))
+        elif travel_class == 'SL':
+            tatkal_surcharge = max(100.0, round(base_fare * 0.20, 2))
+        else:  # 2S
+            tatkal_surcharge = max(15.0, round(base_fare * 0.10, 2))
         
     gst = 0.0
     if travel_class in ['1A', '2A', '3A', 'CC']:
@@ -125,7 +215,7 @@ def get_class_availability(train_id, journey_date, travel_class):
         'base_fare_per_km': config.base_fare_per_km
     }
 
-def search_trains(from_station_code, to_station_code, journey_date):
+def search_trains(from_station_code, to_station_code, journey_date, quota='GN'):
     """
     Find trains running between source and destination stations on given date.
     Returns list of dicts with train info, route details, and class availability.
@@ -158,7 +248,7 @@ def search_trains(from_station_code, to_station_code, journey_date):
             availabilities = {}
             for cfg in train.configs:
                 avail = get_class_availability(train.id, journey_date, cfg.travel_class)
-                fare_info = calculate_fare(distance, cfg.travel_class)
+                fare_info = calculate_fare(distance, cfg.travel_class, quota=quota)
                 availabilities[cfg.travel_class] = {
                     'availability': avail,
                     'fare': fare_info['total_per_passenger']
@@ -215,11 +305,22 @@ def find_preferred_seat_number(travel_class, current_cnf_count, preference, pass
     fallback_berth = assign_berth_type(travel_class, fallback_seat)
     return fallback_seat, fallback_berth
 
-def book_ticket(user_id, train_id, from_station_id, to_station_id, journey_date, travel_class, quota, passengers_data):
+def book_ticket(user_id, train_id, from_station_id, to_station_id, journey_date, travel_class, quota, passengers_data, server_now=None):
     """
     Process ticket booking for multiple passengers.
     Allocates CNF/RAC/WL sequentially, matching berth preferences for CNF seats.
+    Strictly validates 14-day Advance Reservation Period and 10:00 AM Tatkal window.
     """
+    # 1. Validate Advance Reservation Period (14 Days)
+    is_arp_valid, arp_err = validate_advance_reservation_period(journey_date)
+    if not is_arp_valid:
+        return False, arp_err
+
+    # 2. Validate Tatkal Quota Rules (10:00 AM server time and Tomorrow's date only)
+    is_tatkal_valid, tatkal_err = validate_tatkal_eligibility(journey_date, quota, server_now=server_now)
+    if not is_tatkal_valid:
+        return False, tatkal_err
+
     train = Train.query.get(train_id)
     from_st = Station.query.get(from_station_id)
     to_st = Station.query.get(to_station_id)
