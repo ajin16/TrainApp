@@ -257,6 +257,87 @@ class TestIRCTCEngine(unittest.TestCase):
         self.assertIsNone(Booking.query.filter_by(pnr='9999999992').first())
         self.assertIsNotNone(Booking.query.filter_by(pnr='9999999991').first())
 
+    def test_auto_chart_creation_12_hours_before_departure(self):
+        from datetime import datetime, time
+        from services.chart_service import check_and_auto_prepare_charts, get_upcoming_train_chart_statuses
+        from models import ChartLog
+
+        target_date = date.today() + timedelta(days=1)
+        # 1. Book a passenger for Express Special on target_date
+        success, b = book_ticket(
+            self.user_id, self.train_id, self.s1_id, self.s3_id, target_date, '3A', 'GN',
+            [{'name': 'AutoChart Pax', 'age': 35, 'gender': 'Male'}]
+        )
+        self.assertTrue(success)
+        self.assertFalse(b.chart_prepared)
+
+        # Express Special departs at 06:00 (stop 1)
+        # Case A: Simulated time is 18 hours before departure (yesterday 12:00 PM) -> Target date should NOT chart
+        time_18h_before = datetime.combine(target_date - timedelta(days=1), time(12, 0, 0))
+        res_early = check_and_auto_prepare_charts(hours_before=12, now=time_18h_before)
+        target_charted_early = [c for c in res_early['charts_created'] if c['journey_date'] == target_date.strftime('%Y-%m-%d')]
+        self.assertEqual(len(target_charted_early), 0)
+        db.session.refresh(b)
+        self.assertFalse(b.chart_prepared)
+
+        # Case B: Simulated time is 10 hours before departure (yesterday 20:00 PM, <= 12 hours) -> MUST auto-chart!
+        time_10h_before = datetime.combine(target_date - timedelta(days=1), time(20, 0, 0))
+        res_due = check_and_auto_prepare_charts(hours_before=12, now=time_10h_before)
+        target_charted_due = [c for c in res_due['charts_created'] if c['journey_date'] == target_date.strftime('%Y-%m-%d')]
+        self.assertEqual(len(target_charted_due), 1)
+
+        db.session.refresh(b)
+        self.assertTrue(b.chart_prepared)
+        chart_log = ChartLog.query.filter_by(train_id=self.train_id, journey_date=target_date).first()
+        self.assertIsNotNone(chart_log)
+
+        # Case C: Idempotent - re-running should not create duplicate charts
+        res_repeat = check_and_auto_prepare_charts(hours_before=12, now=time_10h_before)
+        target_charted_repeat = [c for c in res_repeat['charts_created'] if c['journey_date'] == target_date.strftime('%Y-%m-%d')]
+        self.assertEqual(len(target_charted_repeat), 0)
+
+    def test_get_full_passenger_chart_and_admin_views(self):
+        from services.chart_service import prepare_reservation_chart, get_full_passenger_chart
+        from models import ChartLog
+
+        chart_date = date.today() + timedelta(days=2)
+        # Book 4 CNF, 1 RAC, 1 WL
+        _, b1 = book_ticket(self.user_id, self.train_id, self.s1_id, self.s3_id, chart_date, '3A', 'GN', [{'name': 'C1', 'age': 30, 'gender': 'Male'}, {'name': 'C2', 'age': 30, 'gender': 'Male'}, {'name': 'C3', 'age': 30, 'gender': 'Male'}, {'name': 'C4', 'age': 30, 'gender': 'Male'}])
+        _, b2 = book_ticket(self.user_id, self.train_id, self.s1_id, self.s3_id, chart_date, '3A', 'GN', [{'name': 'R1', 'age': 30, 'gender': 'Male'}])
+        _, b3 = book_ticket(self.user_id, self.train_id, self.s1_id, self.s3_id, chart_date, '3A', 'GN', [{'name': 'W1', 'age': 30, 'gender': 'Male'}])
+
+        # Prepare chart
+        success, msg, report = prepare_reservation_chart(self.train_id, chart_date)
+        self.assertTrue(success)
+        chart_log = ChartLog.query.filter_by(train_id=self.train_id, journey_date=chart_date).first()
+        self.assertIsNotNone(chart_log)
+
+        # Get full passenger chart
+        data = get_full_passenger_chart(chart_log.id)
+        self.assertEqual(data['total_confirmed'], 4)
+        self.assertEqual(data['total_rac'], 1)
+        self.assertEqual(data['total_auto_refunded'], 1)
+
+        # Test Admin client access
+        with self.client.session_transaction() as sess:
+            sess['user_id'] = self.user_id
+            sess['role'] = 'admin'
+            sess['username'] = 'admin'
+
+        # Test dashboard
+        resp_dash = self.client.get('/admin/dashboard')
+        self.assertEqual(resp_dash.status_code, 200)
+        self.assertIn(b'Control Center', resp_dash.data)
+
+        # Test auto-chart trigger endpoint
+        resp_auto = self.client.get('/admin/auto-chart', follow_redirects=True)
+        self.assertEqual(resp_auto.status_code, 200)
+
+        # Test chart view page
+        resp_view = self.client.get(f'/admin/chart/view/{chart_log.id}')
+        self.assertEqual(resp_view.status_code, 200)
+        self.assertIn(b'OFFICIAL PASSENGER RESERVATION CHART', resp_view.data)
+
 if __name__ == '__main__':
     unittest.main()
 

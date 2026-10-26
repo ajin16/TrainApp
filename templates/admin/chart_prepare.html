@@ -1,68 +1,80 @@
 {% extends 'base.html' %}
 
-{% block title %}Reservation Charting - Admin IRCTC{% endblock %}
+{% block title %}Reservation Charting Control Center - Admin IRCTC{% endblock %}
 
 {% block content %}
 <div class="container py-4">
 
-    <div class="d-flex justify-content-between align-items-center mb-4">
+    <!-- Header -->
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
         <div>
-            <h3 class="fw-bold mb-0 text-dark"><i class="fa-solid fa-clipboard-check text-warning me-2"></i>Reservation Charting Engine</h3>
-            <p class="text-muted small mb-0">Prepare final reservation charts, finalize RAC berth assignments, and auto-refund waitlisted tickets</p>
+            <div class="d-flex align-items-center">
+                <span class="badge bg-warning text-dark me-2 fs-6"><i class="fa-solid fa-gears me-1"></i> Operations</span>
+                <h3 class="fw-bold mb-0 text-dark">Reservation Charting Engine</h3>
+            </div>
+            <p class="text-muted small mb-0 mt-1">Automatic 12-Hour Charting, RAC Seat Finalization, and Auto-Refunds</p>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{{ url_for('admin.trigger_auto_chart') }}" class="btn btn-warning btn-sm fw-bold shadow-sm">
+                <i class="fa-solid fa-bolt me-1"></i> Run 12-Hour Auto-Chart Now
+            </a>
+            <a href="{{ url_for('admin.dashboard') }}" class="btn btn-outline-secondary btn-sm">
+                <i class="fa-solid fa-arrow-left me-1"></i> Dashboard
+            </a>
         </div>
     </div>
 
-    <!-- Chart Preparation Control Box -->
-    <div class="card shadow-sm border-0 rounded-3 mb-4">
-        <div class="card-header bg-dark text-white fw-bold py-3">
-            <i class="fa-solid fa-gears me-2 text-warning"></i> Trigger Reservation Charting
-        </div>
-        <div class="card-body p-4">
-            <form method="POST" action="{{ url_for('admin.chart_prepare') }}" class="row g-3 align-items-center">
-                <div class="col-md-5">
-                    <label class="form-label fw-semibold">Select Train</label>
-                    <select name="train_id" class="form-select" required>
-                        <option value="" disabled selected>Choose active train...</option>
-                        {% for t in trains %}
-                            <option value="{{ t.id }}">{{ t.train_number }} - {{ t.name }} ({{ t.source_station.code }} to {{ t.destination_station.code }})</option>
-                        {% endfor %}
-                    </select>
+    <!-- 12-Hour Auto-Charting Status Information Box -->
+    <div class="card shadow-sm border-0 rounded-3 mb-4 bg-white border-start border-4 border-warning">
+        <div class="card-body p-3">
+            <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
+                <div>
+                    <h6 class="fw-bold mb-1 text-dark">
+                        <i class="fa-solid fa-clock-rotate-left text-warning me-2"></i>
+                        Automated 12-Hour Reservation Charting Policy (IRCTC Standard)
+                    </h6>
+                    <p class="small text-muted mb-0">
+                        The background worker runs continuously every 60 seconds. Any active train departing from its origin station within <strong>{{ auto_chart_hours }} hours</strong> is automatically finalized: bookings are locked, RAC berths are confirmed, and unconfirmed waitlisted tickets are auto-cancelled with refund.
+                    </p>
                 </div>
-                <div class="col-md-4">
-                    <label class="form-label fw-semibold">Journey Date</label>
-                    <input type="date" name="journey_date" class="form-control" required>
+                <div>
+                    <a href="{{ url_for('admin.trigger_auto_chart') }}" class="btn btn-irctc-orange btn-sm px-3 shadow-xs text-nowrap">
+                        <i class="fa-solid fa-bolt me-1"></i> Scan & Chart Eligible Trains
+                    </a>
                 </div>
-                <div class="col-md-3 pt-md-4">
-                    <button type="submit" class="btn btn-warning fw-bold w-100 py-2 shadow-sm" onclick="return confirm('Prepare chart now? This will finalize all berths and auto-refund unconfirmed waitlisted tickets.');">
-                        <i class="fa-solid fa-bolt me-1"></i> Prepare Chart Now
-                    </button>
-                </div>
-            </form>
+            </div>
         </div>
     </div>
 
     {% if report %}
         <!-- Chart Execution Report Box -->
-        <div class="card shadow-md border-0 rounded-3 mb-4 bg-light">
-            <div class="card-header bg-success text-white fw-bold py-3">
-                <i class="fa-solid fa-circle-check me-2"></i> Reservation Chart Summary Report
+        <div class="card shadow-sm border-0 rounded-3 mb-4 bg-white border-start border-4 border-success">
+            <div class="card-header bg-success text-white fw-bold py-3 d-flex justify-content-between align-items-center">
+                <span><i class="fa-solid fa-circle-check me-2"></i> Reservation Chart Summary Report</span>
+                <a href="{{ url_for('admin.chart_view', chart_log_id=report.chart_log_id) }}" class="btn btn-light btn-sm fw-bold text-success">
+                    <i class="fa-solid fa-print me-1"></i> View & Print Station Chart
+                </a>
             </div>
             <div class="card-body p-4">
                 <div class="row text-center g-3">
                     <div class="col-md-3 border-end">
-                        <small class="text-muted d-block">Train</small>
+                        <small class="text-muted d-block">Train Number & Name</small>
                         <strong class="fs-6 text-dark">{{ report.train_number }} - {{ report.train_name }}</strong>
                     </div>
-                    <div class="col-md-3 border-end">
+                    <div class="col-md-2 border-end">
                         <small class="text-muted d-block">Journey Date</small>
                         <strong class="fs-6 text-dark">{{ report.journey_date }}</strong>
+                    </div>
+                    <div class="col-md-2 border-end">
+                        <small class="text-muted d-block">Total Passengers</small>
+                        <span class="fs-5 fw-bold text-primary">{{ report.total_passengers }}</span>
                     </div>
                     <div class="col-md-2 border-end">
                         <small class="text-muted d-block">Confirmed (CNF)</small>
                         <span class="badge badge-cnf fs-6">{{ report.cnf_count }}</span>
                     </div>
-                    <div class="col-md-2 border-end">
-                        <small class="text-muted d-block">RAC Finalized</small>
+                    <div class="col-md-1 border-end">
+                        <small class="text-muted d-block">RAC Berths</small>
                         <span class="badge badge-rac fs-6">{{ report.rac_count }}</span>
                     </div>
                     <div class="col-md-2">
@@ -74,40 +86,167 @@
         </div>
     {% endif %}
 
-    <!-- Chart Logs Table -->
-    <div class="card shadow-sm border-0 rounded-3">
-        <div class="card-header bg-secondary text-white fw-bold py-3">
-            <i class="fa-solid fa-clock-rotate-left me-2"></i> Chart Preparation Log History
+    <!-- Live 12-Hour Upcoming Train Departures Monitor -->
+    <div class="card shadow-sm border-0 rounded-3 mb-4 bg-white">
+        <div class="card-header bg-dark text-white fw-bold py-3 d-flex justify-content-between align-items-center">
+            <span>
+                <i class="fa-solid fa-train-subway text-warning me-2"></i>
+                Upcoming Train Departures Monitor (Next 48 Hours)
+            </span>
+            <span class="badge bg-secondary">Auto-Charting Active (T-{{ auto_chart_hours }}h)</span>
         </div>
         <div class="card-body p-0">
-            <div class="table-responsive">
-                <table class="table table-hover align-middle mb-0">
-                    <thead class="table-light">
-                        <tr>
-                            <th>Prepared At</th>
-                            <th>Train</th>
-                            <th>Journey Date</th>
-                            <th>Total Passengers</th>
-                            <th>CNF</th>
-                            <th>RAC</th>
-                            <th>Auto-Cancelled WL</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for log in chart_logs %}
+            {% if not upcoming_schedules %}
+                <div class="p-4 text-center text-muted">
+                    <p class="mb-0">No upcoming train schedules found in the next 48 hours.</p>
+                </div>
+            {% else %}
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
                             <tr>
-                                <td>{{ log.prepared_at.strftime('%d-%b-%Y %H:%M') }}</td>
-                                <td class="fw-bold">{{ log.train.train_number }} - {{ log.train.name }}</td>
-                                <td>{{ log.journey_date.strftime('%d-%b-%Y') }}</td>
-                                <td>{{ log.total_passengers }}</td>
-                                <td><span class="badge badge-cnf">{{ log.cnf_count }}</span></td>
-                                <td><span class="badge badge-rac">{{ log.rac_count }}</span></td>
-                                <td><span class="badge badge-wl">{{ log.auto_cancelled_wl_count }}</span></td>
+                                <th>Train</th>
+                                <th>Route</th>
+                                <th>Journey Date</th>
+                                <th>Origin Departure</th>
+                                <th>Time Remaining</th>
+                                <th>Current Bookings</th>
+                                <th>Chart Status (12h Rule)</th>
+                                <th>Action</th>
                             </tr>
+                        </thead>
+                        <tbody>
+                            {% for s in upcoming_schedules %}
+                                <tr>
+                                    <td>
+                                        <span class="badge bg-dark text-warning fs-6 me-1">{{ s.train_number }}</span>
+                                        <strong>{{ s.train_name }}</strong>
+                                    </td>
+                                    <td>
+                                        <small class="fw-semibold">{{ s.source_code }} $\rightarrow$ {{ s.dest_code }}</small>
+                                    </td>
+                                    <td>{{ s.journey_date.strftime('%d-%b-%Y') }}</td>
+                                    <td>
+                                        <strong class="text-primary">{{ s.departure_time }}</strong>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-light text-dark border">{{ s.countdown_str }}</span>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-success me-1">{{ s.cnf_count }} CNF</span>
+                                        <span class="badge bg-warning text-dark me-1">{{ s.rac_count }} RAC</span>
+                                        <span class="badge bg-danger">{{ s.wl_count }} WL</span>
+                                    </td>
+                                    <td>
+                                        <span class="badge {{ s.badge_class }} py-1 px-2">
+                                            {{ s.status_label }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        {% if s.chart_log %}
+                                            <a href="{{ url_for('admin.chart_view', chart_log_id=s.chart_log.id) }}" class="btn btn-sm btn-outline-success">
+                                                <i class="fa-solid fa-file-invoice me-1"></i> Passenger Chart
+                                            </a>
+                                        {% elif s.can_prepare %}
+                                            <form method="POST" action="{{ url_for('admin.chart_prepare') }}" class="d-inline">
+                                                <input type="hidden" name="train_id" value="{{ s.train_id }}">
+                                                <input type="hidden" name="journey_date" value="{{ s.journey_date_str }}">
+                                                <button type="submit" class="btn btn-sm btn-warning fw-bold shadow-xs">
+                                                    <i class="fa-solid fa-bolt me-1"></i> Chart Now
+                                                </button>
+                                            </form>
+                                        {% else %}
+                                            <span class="text-muted small">--</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Manual Override Chart Trigger Box -->
+    <div class="card shadow-sm border-0 rounded-3 mb-4 bg-white">
+        <div class="card-header bg-light fw-bold py-3 border-bottom">
+            <i class="fa-solid fa-sliders me-2 text-primary"></i> Manual Chart Trigger (Override)
+        </div>
+        <div class="card-body p-4">
+            <form method="POST" action="{{ url_for('admin.chart_prepare') }}" class="row g-3 align-items-center">
+                <div class="col-md-5">
+                    <label class="form-label fw-semibold small">Select Train</label>
+                    <select name="train_id" class="form-select" required>
+                        <option value="" disabled selected>Choose active train...</option>
+                        {% for t in trains %}
+                            <option value="{{ t.id }}">{{ t.train_number }} - {{ t.name }} ({{ t.source_station.code }} to {{ t.destination_station.code }})</option>
                         {% endfor %}
-                    </tbody>
-                </table>
-            </div>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label fw-semibold small">Journey Date</label>
+                    <input type="date" name="journey_date" class="form-control" value="{{ max_journey_date }}" required>
+                </div>
+                <div class="col-md-3 pt-md-4">
+                    <button type="submit" class="btn btn-warning fw-bold w-100 py-2 shadow-xs" onclick="return confirm('Prepare reservation chart now? This will finalize all seats and auto-refund unconfirmed waitlisted tickets.');">
+                        <i class="fa-solid fa-bolt me-1"></i> Trigger Chart Now
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Chart Logs Table -->
+    <div class="card shadow-sm border-0 rounded-3 bg-white">
+        <div class="card-header bg-light fw-bold py-3 border-bottom d-flex justify-content-between align-items-center">
+            <span><i class="fa-solid fa-clock-rotate-left me-2 text-primary"></i> Chart Preparation Log History</span>
+            <span class="badge bg-secondary">{{ chart_logs | length }} Records</span>
+        </div>
+        <div class="card-body p-0">
+            {% if not chart_logs %}
+                <div class="p-4 text-center text-muted">
+                    No chart logs found.
+                </div>
+            {% else %}
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Prepared Timestamp</th>
+                                <th>Train</th>
+                                <th>Journey Date</th>
+                                <th>Total Pax</th>
+                                <th>CNF</th>
+                                <th>RAC Finalized</th>
+                                <th>WL Auto-Refunded</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for log in chart_logs %}
+                                <tr>
+                                    <td>{{ log.prepared_at.strftime('%d-%b-%Y %H:%M') }}</td>
+                                    <td>
+                                        <span class="badge bg-dark text-warning me-1">{{ log.train.train_number }}</span>
+                                        <strong>{{ log.train.name }}</strong>
+                                    </td>
+                                    <td><strong>{{ log.journey_date.strftime('%d-%b-%Y') }}</strong></td>
+                                    <td><span class="badge bg-primary fs-6">{{ log.total_passengers }}</span></td>
+                                    <td><span class="badge badge-cnf">{{ log.cnf_count }}</span></td>
+                                    <td><span class="badge badge-rac">{{ log.rac_count }}</span></td>
+                                    <td><span class="badge badge-wl">{{ log.auto_cancelled_wl_count }}</span></td>
+                                    <td>
+                                        <a href="{{ url_for('admin.chart_view', chart_log_id=log.id) }}" class="btn btn-sm btn-outline-primary">
+                                            <i class="fa-solid fa-receipt me-1"></i> View Chart
+                                        </a>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% endif %}
         </div>
     </div>
 

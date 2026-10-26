@@ -1,0 +1,217 @@
+{% extends 'base.html' %}
+
+{% block title %}Official Passenger Reservation Chart - Train {{ data.train.train_number }} ({{ data.journey_date.strftime('%d-%b-%Y') }}){% endblock %}
+
+{% block content %}
+<div class="container py-4">
+
+    <!-- Action Bar -->
+    <div class="d-flex justify-content-between align-items-center mb-4 btn-print-hide">
+        <a href="{{ url_for('admin.chart_prepare') }}" class="btn btn-outline-secondary btn-sm">
+            <i class="fa-solid fa-arrow-left me-1"></i> Back to Charting Center
+        </a>
+        <div class="d-flex gap-2">
+            <button onclick="window.print()" class="btn btn-primary btn-sm">
+                <i class="fa-solid fa-print me-1"></i> Print Station Chart
+            </button>
+            <a href="{{ url_for('admin.dashboard') }}" class="btn btn-outline-primary btn-sm">
+                <i class="fa-solid fa-gauge me-1"></i> Dashboard
+            </a>
+        </div>
+    </div>
+
+    <!-- Official IRCTC Station Reservation Chart Container -->
+    <div class="card shadow-sm border-0 rounded-3 bg-white p-4">
+        
+        <!-- Header Banner -->
+        <div class="border-bottom pb-3 mb-4 text-center">
+            <div class="d-flex justify-content-center align-items-center mb-1">
+                <i class="fa-solid fa-train text-primary fa-2xl me-2"></i>
+                <h3 class="fw-bold text-dark mb-0">INDIAN RAILWAYS</h3>
+            </div>
+            <h5 class="text-secondary fw-semibold mb-1">OFFICIAL PASSENGER RESERVATION CHART</h5>
+            <small class="text-muted">
+                Centre for Railway Information Systems (CRIS) | Prepared: <strong>{{ data.prepared_at.strftime('%d-%b-%Y %H:%M:%S') }} IST</strong>
+            </small>
+        </div>
+
+        <!-- Train & Run Summary Meta Box -->
+        <div class="row g-3 bg-light p-3 rounded-3 mb-4 align-items-center border">
+            <div class="col-md-3">
+                <small class="text-muted d-block text-uppercase">Train Number & Name</small>
+                <strong class="fs-6 text-dark">{{ data.train.train_number }} / {{ data.train.name }}</strong>
+            </div>
+            <div class="col-md-3">
+                <small class="text-muted d-block text-uppercase">Journey Route</small>
+                <strong class="fs-6 text-primary">{{ data.train.source_station.name }} ({{ data.train.source_station.code }}) $\rightarrow$ {{ data.train.destination_station.name }} ({{ data.train.destination_station.code }})</strong>
+            </div>
+            <div class="col-md-3">
+                <small class="text-muted d-block text-uppercase">Date of Journey</small>
+                <strong class="fs-6 text-dark">{{ data.journey_date.strftime('%d-%b-%Y') }}</strong>
+            </div>
+            <div class="col-md-3 text-md-end">
+                <small class="text-muted d-block text-uppercase">Chartered Summary</small>
+                <span class="badge bg-success me-1">{{ data.total_confirmed }} CNF</span>
+                <span class="badge bg-warning text-dark me-1">{{ data.total_rac }} RAC</span>
+                <span class="badge bg-danger">{{ data.total_auto_refunded }} WL Refunded</span>
+            </div>
+        </div>
+
+        <!-- Section 1: Confirmed Passengers List (Coach & Seat Wise) -->
+        <div class="mb-4">
+            <h5 class="fw-bold text-dark border-bottom pb-2 mb-3">
+                <i class="fa-solid fa-chair text-success me-2"></i>
+                1. Confirmed Passengers (Coach & Berth Allocation)
+                <span class="badge bg-success float-end fs-6">{{ data.total_confirmed }} Passengers</span>
+            </h5>
+
+            {% if not data.confirmed_passengers %}
+                <div class="p-3 text-center text-muted small bg-light rounded-3">
+                    No confirmed passengers for this train run.
+                </div>
+            {% else %}
+                <div class="table-responsive">
+                    <table class="table table-bordered table-sm align-middle text-center small">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>#</th>
+                                <th>Coach</th>
+                                <th>Seat No.</th>
+                                <th>Berth Type</th>
+                                <th>Passenger Name</th>
+                                <th>Age / Gender</th>
+                                <th>From $\rightarrow$ To</th>
+                                <th>PNR</th>
+                                <th>Class / Quota</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for p in data.confirmed_passengers %}
+                                <tr>
+                                    <td>{{ loop.index }}</td>
+                                    <td><strong class="text-primary fs-6">{{ p.coach_no }}</strong></td>
+                                    <td><strong class="text-dark fs-6">{{ p.seat_no }}</strong></td>
+                                    <td><span class="badge bg-light text-dark border">{{ p.berth_type }}</span></td>
+                                    <td class="text-start fw-bold">{{ p.name }}</td>
+                                    <td>{{ p.age }} / {{ p.gender[0] }}</td>
+                                    <td>{{ p.from_station }} $\rightarrow$ {{ p.to_station }}</td>
+                                    <td><code>{{ p.pnr }}</code></td>
+                                    <td>{{ p.travel_class }} | {{ p.quota }}</td>
+                                    <td><span class="badge badge-cnf">CNF</span></td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% endif %}
+        </div>
+
+        <!-- Section 2: RAC Finalized Passengers -->
+        <div class="mb-4">
+            <h5 class="fw-bold text-dark border-bottom pb-2 mb-3">
+                <i class="fa-solid fa-user-group text-warning me-2"></i>
+                2. Finalized RAC Passengers (Reservation Against Cancellation)
+                <span class="badge bg-warning text-dark float-end fs-6">{{ data.total_rac }} Passengers</span>
+            </h5>
+
+            {% if not data.rac_passengers %}
+                <div class="p-3 text-center text-muted small bg-light rounded-3">
+                    No RAC passengers on this schedule.
+                </div>
+            {% else %}
+                <div class="table-responsive">
+                    <table class="table table-bordered table-sm align-middle text-center small">
+                        <thead class="table-warning text-dark">
+                            <tr>
+                                <th>#</th>
+                                <th>Assigned Coach</th>
+                                <th>Allocated Berth</th>
+                                <th>Passenger Name</th>
+                                <th>Age / Gender</th>
+                                <th>PNR</th>
+                                <th>Class / Quota</th>
+                                <th>Final Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for p in data.rac_passengers %}
+                                <tr>
+                                    <td>{{ loop.index }}</td>
+                                    <td><strong>{{ p.coach_no }}</strong></td>
+                                    <td><strong>Seat {{ p.seat_no }} ({{ p.berth_type }})</strong></td>
+                                    <td class="text-start fw-bold">{{ p.name }}</td>
+                                    <td>{{ p.age }} / {{ p.gender[0] }}</td>
+                                    <td><code>{{ p.pnr }}</code></td>
+                                    <td>{{ p.travel_class }} | {{ p.quota }}</td>
+                                    <td><span class="badge badge-rac">RAC Finalized</span></td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% endif %}
+        </div>
+
+        <!-- Section 3: Auto-Cancelled & Refunded Waitlist Passengers -->
+        <div class="mb-3">
+            <h5 class="fw-bold text-dark border-bottom pb-2 mb-3">
+                <i class="fa-solid fa-ban text-danger me-2"></i>
+                3. Auto-Cancelled Waitlist (WL) Tickets & Processed Refunds
+                <span class="badge bg-danger float-end fs-6">{{ data.total_auto_refunded }} Cancelled</span>
+            </h5>
+
+            {% if not data.cancelled_wl_passengers %}
+                <div class="p-3 text-center text-muted small bg-light rounded-3">
+                    Zero unconfirmed waitlist passengers. All waitlisted tickets were either confirmed, promoted, or none booked.
+                </div>
+            {% else %}
+                <div class="table-responsive">
+                    <table class="table table-bordered table-sm align-middle text-center small">
+                        <thead class="table-danger text-dark">
+                            <tr>
+                                <th>#</th>
+                                <th>Passenger Name</th>
+                                <th>Age / Gender</th>
+                                <th>PNR</th>
+                                <th>Class</th>
+                                <th>Pre-Chart Status</th>
+                                <th>Current Status</th>
+                                <th>Processed Refund</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for p in data.cancelled_wl_passengers %}
+                                <tr>
+                                    <td>{{ loop.index }}</td>
+                                    <td class="text-start fw-bold">{{ p.name }}</td>
+                                    <td>{{ p.age }} / {{ p.gender[0] }}</td>
+                                    <td><code>{{ p.pnr }}</code></td>
+                                    <td>{{ p.travel_class }}</td>
+                                    <td><span class="badge bg-secondary">{{ p.booking_status }}</span></td>
+                                    <td><span class="badge bg-danger">AUTO_CANCELLED_WL</span></td>
+                                    <td class="fw-bold text-success">₹{{ "%.2f"|format(p.refund_amount) }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% endif %}
+        </div>
+
+        <!-- Official Sign-off -->
+        <div class="border-top pt-4 mt-4 d-flex justify-content-between align-items-center text-muted small">
+            <div>
+                Generated by IRCTC NextGen Automatic Charting Engine (T-12h Rule)<br>
+                Official Train Chart ID: <code>CHART-{{ data.chart_log.id }}-TR{{ data.train.train_number }}</code>
+            </div>
+            <div class="text-end">
+                ___________________________<br>
+                <strong>Train Ticket Examiner (TTE) / Station Master Signature</strong>
+            </div>
+        </div>
+
+    </div>
+
+</div>
+{% endblock %}

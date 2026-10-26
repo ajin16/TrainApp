@@ -64,6 +64,14 @@ def create_app(test_config=None, testing=False):
         action = "Permanently purged" if purge else "Archived"
         click.echo(f"Retention Job: {action} {count} transactions older than {days} days.")
 
+    @app.cli.command('auto-chart')
+    @click.option('--hours', default=12, help='Hours before origin departure (default: 12)')
+    def auto_chart_command(hours):
+        """Automated Charting: Trigger reservation charts for trains within N hours of departure."""
+        from services.chart_service import check_and_auto_prepare_charts
+        res = check_and_auto_prepare_charts(hours_before=hours)
+        click.echo(f"Auto-Charting Completed: Generated {res['count']} reservation chart(s).")
+
     with app.app_context():
         # Safe table creation for uninitialized databases or local SQLite
         db.create_all()
@@ -73,7 +81,31 @@ def create_app(test_config=None, testing=False):
             from seed_data import seed_if_empty
             seed_if_empty(app)
 
+    # Start automated background charting daemon (checks every 60s for trains 12h before departure)
+    if not app.config.get('TESTING') and os.environ.get('DISABLE_AUTO_CHART', '0') != '1':
+        _start_auto_chart_daemon(app)
+
     return app
+
+def _start_auto_chart_daemon(app):
+    """Background daemon thread to automatically create charts 12 hours before train departures."""
+    import threading
+    import time
+
+    def daemon_loop():
+        # Small initial delay to allow server initialization
+        time.sleep(5)
+        while True:
+            try:
+                with app.app_context():
+                    from services.chart_service import check_and_auto_prepare_charts
+                    check_and_auto_prepare_charts(hours_before=12)
+            except Exception:
+                pass
+            time.sleep(60)  # Check every 60 seconds
+
+    daemon_thread = threading.Thread(target=daemon_loop, daemon=True, name="AutoChartDaemon")
+    daemon_thread.start()
 
 # Gunicorn entry point  (gunicorn "app:app")
 app = create_app()

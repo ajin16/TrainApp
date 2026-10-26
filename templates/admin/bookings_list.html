@@ -5,20 +5,35 @@
 {% block content %}
 <div class="container py-4">
 
-    <div class="d-flex justify-content-between align-items-center mb-4">
+    <!-- Header -->
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
         <div>
-            <h3 class="fw-bold mb-0 text-dark"><i class="fa-solid fa-list-check text-warning me-2"></i>Global Bookings Inventory</h3>
-            <p class="text-muted small mb-0">Search and monitor all system bookings across trains and dates</p>
+            <div class="d-flex align-items-center">
+                <span class="badge bg-secondary text-white me-2 fs-6"><i class="fa-solid fa-list-check me-1"></i> Inventory</span>
+                <h3 class="fw-bold mb-0 text-dark">Global Bookings Inventory</h3>
+            </div>
+            <p class="text-muted small mb-0 mt-1">Audit, search, and monitor all passenger bookings across routes and dates</p>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{{ url_for('admin.dashboard') }}" class="btn btn-outline-secondary btn-sm">
+                <i class="fa-solid fa-arrow-left me-1"></i> Dashboard
+            </a>
+            <a href="{{ url_for('admin.chart_prepare') }}" class="btn btn-warning btn-sm fw-bold">
+                <i class="fa-solid fa-clipboard-check me-1"></i> Charting Center
+            </a>
         </div>
     </div>
 
-    <!-- Search / Filter Card -->
-    <div class="card shadow-sm border-0 mb-4 rounded-3 p-3">
-        <form method="GET" action="{{ url_for('admin.bookings_list') }}" class="row g-3">
-            <div class="col-md-6">
-                <input type="text" name="pnr" class="form-control" placeholder="Search by PNR..." value="{{ pnr_query }}">
+    <!-- Search & Filter Card -->
+    <div class="card shadow-sm border-0 mb-4 rounded-3 p-3 bg-white">
+        <form method="GET" action="{{ url_for('admin.bookings_list') }}" class="row g-2 align-items-center">
+            <div class="col-md-5">
+                <div class="input-group">
+                    <span class="input-group-text bg-light"><i class="fa-solid fa-magnifying-glass text-muted"></i></span>
+                    <input type="text" name="pnr" class="form-control" placeholder="Search by 10-digit PNR..." value="{{ pnr_query }}">
+                </div>
             </div>
-            <div class="col-md-4">
+            <div class="col-md-3">
                 <select name="status" class="form-select">
                     <option value="">All Booking Statuses</option>
                     <option value="BOOKED" {% if status_filter == 'BOOKED' %}selected{% endif %}>BOOKED (Active)</option>
@@ -27,58 +42,107 @@
                 </select>
             </div>
             <div class="col-md-2">
+                <select name="travel_class" class="form-select">
+                    <option value="">All Classes</option>
+                    <option value="1A" {% if class_filter == '1A' %}selected{% endif %}>1A (First AC)</option>
+                    <option value="2A" {% if class_filter == '2A' %}selected{% endif %}>2A (2-Tier AC)</option>
+                    <option value="3A" {% if class_filter == '3A' %}selected{% endif %}>3A (3-Tier AC)</option>
+                    <option value="SL" {% if class_filter == 'SL' %}selected{% endif %}>SL (Sleeper)</option>
+                    <option value="CC" {% if class_filter == 'CC' %}selected{% endif %}>CC (Chair Car)</option>
+                    <option value="2S" {% if class_filter == '2S' %}selected{% endif %}>2S (Second Sitting)</option>
+                </select>
+            </div>
+            <div class="col-md-2 d-flex gap-2">
                 <button type="submit" class="btn btn-primary w-100"><i class="fa-solid fa-filter me-1"></i> Filter</button>
+                {% if pnr_query or status_filter or class_filter %}
+                    <a href="{{ url_for('admin.bookings_list') }}" class="btn btn-outline-secondary">Reset</a>
+                {% endif %}
             </div>
         </form>
     </div>
 
     <!-- Bookings Table -->
-    <div class="card shadow-sm border-0 rounded-3">
+    <div class="card shadow-sm border-0 rounded-3 bg-white">
+        <div class="card-header bg-light fw-bold py-3 d-flex justify-content-between align-items-center border-bottom">
+            <span><i class="fa-solid fa-ticket me-2 text-primary"></i> Recorded Bookings ({{ bookings | length }})</span>
+            <span class="badge bg-secondary">{{ bookings | selectattr('chart_prepared') | list | length }} Charted</span>
+        </div>
         <div class="card-body p-0">
-            <div class="table-responsive">
-                <table class="table table-hover align-middle mb-0">
-                    <thead class="table-dark">
-                        <tr>
-                            <th>PNR</th>
-                            <th>Train</th>
-                            <th>User</th>
-                            <th>From $\rightarrow$ To</th>
-                            <th>Journey Date</th>
-                            <th>Class</th>
-                            <th>Total Fare</th>
-                            <th>Status</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for b in bookings %}
+            {% if not bookings %}
+                <div class="p-5 text-center text-muted">
+                    <i class="fa-solid fa-ticket-simple fa-3x mb-3 text-secondary"></i>
+                    <h5>No Bookings Found</h5>
+                    <p class="small text-muted mb-0">No booking records match the selected filter criteria.</p>
+                </div>
+            {% else %}
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
                             <tr>
-                                <td class="fw-bold text-primary">{{ b.pnr }}</td>
-                                <td>{{ b.train.train_number }} - {{ b.train.name }}</td>
-                                <td>{{ b.user.username }}</td>
-                                <td><small>{{ b.from_station.code }} $\rightarrow$ {{ b.to_station.code }}</small></td>
-                                <td>{{ b.journey_date.strftime('%d-%b-%Y') }}</td>
-                                <td><span class="badge bg-secondary">{{ b.travel_class }} | {{ b.quota }}</span></td>
-                                <td class="fw-bold text-success">₹{{ "%.2f"|format(b.total_fare) }}</td>
-                                <td>
-                                    {% if b.status == 'BOOKED' %}
-                                        <span class="badge bg-success">BOOKED</span>
-                                    {% elif b.status == 'PARTIALLY_CANCELLED' %}
-                                        <span class="badge bg-warning text-dark">PARTIAL</span>
-                                    {% else %}
-                                        <span class="badge bg-secondary">CANCELLED</span>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    <a href="{{ url_for('user.ticket_detail', booking_id=b.id) }}" class="btn btn-sm btn-outline-primary" target="_blank">
-                                        <i class="fa-solid fa-file-invoice"></i> Ticket
-                                    </a>
-                                </td>
+                                <th>PNR</th>
+                                <th>Train</th>
+                                <th>User</th>
+                                <th>Route</th>
+                                <th>Journey Date</th>
+                                <th>Class / Quota</th>
+                                <th>Passengers</th>
+                                <th>Total Fare</th>
+                                <th>Status</th>
+                                <th>Chart</th>
+                                <th>Action</th>
                             </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
+                        </thead>
+                        <tbody>
+                            {% for b in bookings %}
+                                <tr>
+                                    <td>
+                                        <a href="{{ url_for('user.ticket_detail', booking_id=b.id) }}" class="text-decoration-none" target="_blank">
+                                            <span class="badge bg-dark text-warning fs-6">{{ b.pnr }}</span>
+                                        </a>
+                                    </td>
+                                    <td>
+                                        <strong>{{ b.train.train_number }}</strong>
+                                        <small class="text-muted d-block">{{ b.train.name }}</small>
+                                    </td>
+                                    <td>{{ b.user.username }}</td>
+                                    <td>
+                                        <small class="fw-semibold">{{ b.from_station.code }} $\rightarrow$ {{ b.to_station.code }}</small>
+                                    </td>
+                                    <td><strong>{{ b.journey_date.strftime('%d-%b-%Y') }}</strong></td>
+                                    <td><span class="badge bg-secondary">{{ b.travel_class }} | {{ b.quota }}</span></td>
+                                    <td>
+                                        <span class="badge bg-light text-dark border">
+                                            {{ b.passengers | length }} Pax
+                                        </span>
+                                    </td>
+                                    <td class="fw-bold text-success">₹{{ "%.2f"|format(b.total_fare) }}</td>
+                                    <td>
+                                        {% if b.status == 'BOOKED' %}
+                                            <span class="badge bg-success">ACTIVE</span>
+                                        {% elif b.status == 'PARTIALLY_CANCELLED' %}
+                                            <span class="badge bg-warning text-dark">PARTIAL</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">CANCELLED</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if b.chart_prepared %}
+                                            <span class="badge bg-primary"><i class="fa-solid fa-check"></i> Prepared</span>
+                                        {% else %}
+                                            <span class="badge bg-light text-muted border">Pending</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <a href="{{ url_for('user.ticket_detail', booking_id=b.id) }}" class="btn btn-sm btn-outline-primary" target="_blank">
+                                            <i class="fa-solid fa-eye me-1"></i> Ticket
+                                        </a>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% endif %}
         </div>
     </div>
 
