@@ -36,27 +36,40 @@ def seed(app=None, force=False):
     if not force and is_database_seeded():
         print("[Database Init] Database already seeded. Skipping redundant seed.")
         return True
-    build_data()
-    return True
+    return build_data(app=app, force=force)
 
 
-# Set up project path
+def build_data(app=None, force=False):
+    if app is None:
+        try:
+            from flask import current_app
+            if current_app:
+                app = current_app._get_current_object()
+        except Exception:
+            pass
 
+    if app is None:
+        from app import create_app
+        app = create_app()
 
-def build_data():
-    app = create_app()
     with app.app_context():
         print(f"Connecting to database: {db.engine.url}")
         
-        # 1. Wipe all existing data completely (Requirement 5)
-        print("--> Requirement 5: Deleting all existing data currently in database...")
-        db.session.execute(db.text("SET FOREIGN_KEY_CHECKS = 0;"))
-        for table in ['chart_logs', 'passengers', 'bookings', 'coach_quota_configs', 'route_stations', 'trains', 'stations', 'users']:
-            print(f"    Truncating {table}...")
-            db.session.execute(db.text(f"TRUNCATE TABLE {table};"))
-        db.session.execute(db.text("SET FOREIGN_KEY_CHECKS = 1;"))
-        db.session.commit()
-        print("--> Database wiped successfully.")
+        # 1. Wipe all existing data ONLY if force=True
+        if force:
+            print("--> Force mode active: Deleting all existing data currently in database...")
+            if db.engine.name == 'sqlite':
+                db.session.execute(db.text("PRAGMA foreign_keys = OFF;"))
+                for table in ['chart_logs', 'passengers', 'bookings', 'coach_quota_configs', 'route_stations', 'trains', 'stations', 'users']:
+                    db.session.execute(db.text(f"DELETE FROM {table};"))
+                db.session.execute(db.text("PRAGMA foreign_keys = ON;"))
+            else:
+                db.session.execute(db.text("SET FOREIGN_KEY_CHECKS = 0;"))
+                for table in ['chart_logs', 'passengers', 'bookings', 'coach_quota_configs', 'route_stations', 'trains', 'stations', 'users']:
+                    db.session.execute(db.text(f"TRUNCATE TABLE {table};"))
+                db.session.execute(db.text("SET FOREIGN_KEY_CHECKS = 1;"))
+            db.session.commit()
+            print("--> Database wiped successfully.")
 
         # 2. Seed Users (Requirement 7: Admin password 'qwertyuiop')
         print("--> Requirement 7: Seeding admin accounts with password 'qwertyuiop'...")
@@ -76,10 +89,17 @@ def build_data():
             User(username='venkat', email='venkat.r@gmail.com', password_hash=user_hash, full_name='Venkatesh Rao', phone='9880300445', role='user'),
             User(username='meena', email='meena.b@gmail.com', password_hash=user_hash, full_name='Meenakshi Sundaram', phone='9842400556', role='user'),
         ]
-        db.session.add_all(users)
+        user_map = {}
+        for u in users:
+            existing = User.query.filter_by(username=u.username).first()
+            if not existing:
+                db.session.add(u)
+                user_map[u.username] = u
+            else:
+                existing.password_hash = u.password_hash
+                user_map[u.username] = existing
         db.session.commit()
-        user_map = {u.username: u for u in users}
-        print(f"--> Seeded {len(users)} users.")
+        print(f"--> Seeded/Verified {len(users)} users.")
 
         # 3. Seed Stations (Requirement 9: South Indian Network)
         print("--> Requirement 9: Seeding expanded South Indian railway stations...")
@@ -185,13 +205,14 @@ def build_data():
             ('HWH', 'Howrah Junction', 'Kolkata', 'West Bengal')
         ]
 
-        station_objs = []
         for code, name, city, state in stations_data:
-            station_objs.append(Station(code=code, name=name, city=city, state=state))
-        db.session.add_all(station_objs)
+            existing = Station.query.filter_by(code=code).first()
+            if not existing:
+                st = Station(code=code, name=name, city=city, state=state)
+                db.session.add(st)
         db.session.commit()
         st_map = {s.code: s for s in Station.query.all()}
-        print(f"--> Seeded {len(st_map)} stations across South India.")
+        print(f"--> Seeded/Verified {len(st_map)} stations across South India.")
 
         # 4. Seed 50 Real South Indian Trains & Schedules (Requirement 9)
         print("--> Requirement 9: Seeding 50 real South Indian trains, routes, and coach configurations...")
@@ -778,42 +799,46 @@ def build_data():
             if not src_st or not dst_st:
                 continue
 
-            tr = Train(
-                train_number=t_num,
-                name=t_name,
-                source_station_id=src_st.id,
-                destination_station_id=dst_st.id,
-                operating_days=days,
-                is_active=True
-            )
-            db.session.add(tr)
-            db.session.flush()
+            tr = Train.query.filter_by(train_number=t_num).first()
+            if not tr:
+                tr = Train(
+                    train_number=t_num,
+                    name=t_name,
+                    source_station_id=src_st.id,
+                    destination_station_id=dst_st.id,
+                    operating_days=days,
+                    is_active=True
+                )
+                db.session.add(tr)
+                db.session.flush()
 
-            for st_code, stop_num, dist, arr, dep, day_num in routes:
-                st = st_map.get(st_code)
-                if st:
-                    route_objs.append(RouteStation(
+                for st_code, stop_num, dist, arr, dep, day_num in routes:
+                    st = st_map.get(st_code)
+                    if st:
+                        route_objs.append(RouteStation(
+                            train_id=tr.id,
+                            station_id=st.id,
+                            stop_number=stop_num,
+                            distance_km=dist,
+                            arrival_time=arr,
+                            departure_time=dep,
+                            day_number=day_num
+                        ))
+
+                for travel_class, total_cnf, total_rac, total_wl, base_fare in quotas:
+                    quota_objs.append(CoachQuotaConfig(
                         train_id=tr.id,
-                        station_id=st.id,
-                        stop_number=stop_num,
-                        distance_km=dist,
-                        arrival_time=arr,
-                        departure_time=dep,
-                        day_number=day_num
+                        travel_class=travel_class,
+                        total_cnf_seats=total_cnf,
+                        total_rac_seats=total_rac,
+                        total_wl_seats=total_wl,
+                        base_fare_per_km=base_fare
                     ))
 
-            for travel_class, total_cnf, total_rac, total_wl, base_fare in quotas:
-                quota_objs.append(CoachQuotaConfig(
-                    train_id=tr.id,
-                    travel_class=travel_class,
-                    total_cnf_seats=total_cnf,
-                    total_rac_seats=total_rac,
-                    total_wl_seats=total_wl,
-                    base_fare_per_km=base_fare
-                ))
-
-        db.session.add_all(route_objs)
-        db.session.add_all(quota_objs)
+        if route_objs:
+            db.session.add_all(route_objs)
+        if quota_objs:
+            db.session.add_all(quota_objs)
         db.session.commit()
         print(f"--> Successfully seeded {len(trains_def)} trains, {len(route_objs)} route stations, and {len(quota_objs)} coach configurations.")
 
@@ -859,6 +884,10 @@ def build_data():
         def get_coach_prefix(t_class):
             prefixes = {'1A': 'H', '2A': 'A', '3A': 'B', 'SL': 'S', 'CC': 'C', '2S': 'D'}
             return prefixes.get(t_class, 'S')
+
+        if Booking.query.first() is not None:
+            print("--> Bookings already exist in database. Skipping redundant booking generation.")
+            return True
 
         # Select 12 trunk line popular trains for extensive 2-week waitlist bookings
         focus_trains = [
