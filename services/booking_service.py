@@ -72,10 +72,10 @@ def validate_tatkal_eligibility(journey_date, quota, server_now=None):
 
     return True, None
 
-def archive_or_purge_old_transactions(retention_days=5, purge=False):
+def archive_or_purge_old_transactions(retention_days=5, purge=True):
     """
     5-Day Transaction Retention Policy:
-    Archives or permanently purges booking transaction records older than retention_days.
+    Permanently purges or archives booking transaction records older than retention_days.
     Returns count of affected records.
     """
     cutoff = datetime.utcnow() - timedelta(days=retention_days)
@@ -98,6 +98,13 @@ def archive_or_purge_old_transactions(retention_days=5, purge=False):
             b.archived_at = now
         db.session.commit()
         return count
+
+def delete_old_booking_history(days=5):
+    """
+    Requirement 1: Automatically delete the history from database which is older than 5 days.
+    Permanently purges expired bookings and cascading passenger records.
+    """
+    return archive_or_purge_old_transactions(retention_days=days, purge=True)
 
 def generate_pnr():
     """Generate a unique 10-digit PNR string."""
@@ -155,9 +162,10 @@ def calculate_fare(distance_km, travel_class, quota='GN'):
         'total_per_passenger': total_per_passenger
     }
 
-def get_class_availability(train_id, journey_date, travel_class):
+def get_class_availability(train_id, journey_date, travel_class, quota='GN'):
     """
-    Compute real-time CNF, RAC, WL seat availability for a train, date, and class.
+    Compute real-time CNF, RAC, WL seat availability for a train, date, class, and quota.
+    Strictly reserves 30% of total CNF seats for Tatkal quota (TQ).
     Returns dict with count breakdown and display status string.
     """
     config = CoachQuotaConfig.query.filter_by(train_id=train_id, travel_class=travel_class).first()
@@ -169,6 +177,11 @@ def get_class_availability(train_id, journey_date, travel_class):
             'total_cnf': 0, 'total_rac': 0, 'total_wl': 0
         }
         
+    # 30% seats reserved for Tatkal quota
+    tatkal_cnf_seats = max(1, round(config.total_cnf_seats * 0.30))
+    general_cnf_seats = max(0, config.total_cnf_seats - tatkal_cnf_seats)
+    tatkal_wl_seats = max(1, round(config.total_wl_seats * 0.30))
+    
     # Count active passengers booked for this train, journey_date, class
     active_passengers = Passenger.query.join(Booking).filter(
         Booking.train_id == train_id,
@@ -177,43 +190,79 @@ def get_class_availability(train_id, journey_date, travel_class):
         Passenger.is_cancelled == False
     ).all()
     
-    cnf_count = sum(1 for p in active_passengers if p.current_status == 'CNF')
-    rac_count = sum(1 for p in active_passengers if p.current_status == 'RAC')
-    wl_count = sum(1 for p in active_passengers if p.current_status == 'WL')
+    tatkal_cnf_count = sum(1 for p in active_passengers if p.booking.quota == 'TQ' and p.current_status == 'CNF')
+    general_cnf_count = sum(1 for p in active_passengers if p.booking.quota != 'TQ' and p.current_status == 'CNF')
+    tatkal_wl_count = sum(1 for p in active_passengers if p.booking.quota == 'TQ' and p.current_status == 'WL')
+    general_rac_count = sum(1 for p in active_passengers if p.booking.quota != 'TQ' and p.current_status == 'RAC')
+    general_wl_count = sum(1 for p in active_passengers if p.booking.quota != 'TQ' and p.current_status == 'WL')
     
-    cnf_left = max(0, config.total_cnf_seats - cnf_count)
-    rac_left = max(0, config.total_rac_seats - rac_count)
-    wl_left = max(0, config.total_wl_seats - wl_count)
-    
-    if cnf_left > 0:
-        display = f"AVAILABLE - {cnf_left}"
-        status_code = 'AVAILABLE'
-    elif rac_left > 0:
-        rac_number = rac_count + 1
-        display = f"RAC {rac_number}"
-        status_code = 'RAC'
-    elif wl_left > 0:
-        wl_number = wl_count + 1
-        display = f"WL {wl_number}"
-        status_code = 'WL'
-    else:
-        display = "REGRET / NOT AVAILABLE"
-        status_code = 'NAV'
+    if quota == 'TQ':
+        cnf_left = max(0, tatkal_cnf_seats - tatkal_cnf_count)
+        rac_left = 0
+        wl_left = max(0, tatkal_wl_seats - tatkal_wl_count)
         
-    return {
-        'status': status_code,
-        'display': display,
-        'cnf_left': cnf_left,
-        'rac_left': rac_left,
-        'wl_left': wl_left,
-        'total_cnf': config.total_cnf_seats,
-        'total_rac': config.total_rac_seats,
-        'total_wl': config.total_wl_seats,
-        'cnf_count': cnf_count,
-        'rac_count': rac_count,
-        'wl_count': wl_count,
-        'base_fare_per_km': config.base_fare_per_km
-    }
+        if cnf_left > 0:
+            display = f"TATKAL - {cnf_left}"
+            status_code = 'AVAILABLE'
+        elif wl_left > 0:
+            display = f"TQWL {tatkal_wl_count + 1}"
+            status_code = 'WL'
+        else:
+            display = "REGRET / TATKAL FULL"
+            status_code = 'NAV'
+            
+        return {
+            'status': status_code,
+            'display': display,
+            'cnf_left': cnf_left,
+            'rac_left': rac_left,
+            'wl_left': wl_left,
+            'total_cnf': tatkal_cnf_seats,
+            'total_rac': 0,
+            'total_wl': tatkal_wl_seats,
+            'cnf_count': tatkal_cnf_count,
+            'rac_count': 0,
+            'wl_count': tatkal_wl_count,
+            'base_fare_per_km': config.base_fare_per_km,
+            'tatkal_reserved_seats': tatkal_cnf_seats,
+            'general_quota_seats': general_cnf_seats
+        }
+    else:
+        cnf_left = max(0, general_cnf_seats - general_cnf_count)
+        rac_left = max(0, config.total_rac_seats - general_rac_count)
+        wl_left = max(0, config.total_wl_seats - general_wl_count)
+        
+        if cnf_left > 0:
+            display = f"AVAILABLE - {cnf_left}"
+            status_code = 'AVAILABLE'
+        elif rac_left > 0:
+            rac_number = general_rac_count + 1
+            display = f"RAC {rac_number}"
+            status_code = 'RAC'
+        elif wl_left > 0:
+            wl_number = general_wl_count + 1
+            display = f"WL {wl_number}"
+            status_code = 'WL'
+        else:
+            display = "REGRET / NOT AVAILABLE"
+            status_code = 'NAV'
+            
+        return {
+            'status': status_code,
+            'display': display,
+            'cnf_left': cnf_left,
+            'rac_left': rac_left,
+            'wl_left': wl_left,
+            'total_cnf': general_cnf_seats,
+            'total_rac': config.total_rac_seats,
+            'total_wl': config.total_wl_seats,
+            'cnf_count': general_cnf_count,
+            'rac_count': general_rac_count,
+            'wl_count': general_wl_count,
+            'base_fare_per_km': config.base_fare_per_km,
+            'tatkal_reserved_seats': tatkal_cnf_seats,
+            'general_quota_seats': general_cnf_seats
+        }
 
 def search_trains(from_station_code, to_station_code, journey_date, quota='GN'):
     """
@@ -247,7 +296,7 @@ def search_trains(from_station_code, to_station_code, journey_date, quota='GN'):
             # Class availability details
             availabilities = {}
             for cfg in train.configs:
-                avail = get_class_availability(train.id, journey_date, cfg.travel_class)
+                avail = get_class_availability(train.id, journey_date, cfg.travel_class, quota=quota)
                 fare_info = calculate_fare(distance, cfg.travel_class, quota=quota)
                 availabilities[cfg.travel_class] = {
                     'availability': avail,
@@ -337,12 +386,13 @@ def book_ticket(user_id, train_id, from_station_id, to_station_id, journey_date,
     fare_info = calculate_fare(distance, travel_class, quota)
     total_fare = fare_info['total_per_passenger'] * len(passengers_data)
     
-    avail = get_class_availability(train_id, journey_date, travel_class)
+    avail = get_class_availability(train_id, journey_date, travel_class, quota=quota)
     
     total_passengers = len(passengers_data)
     available_total_capacity = avail['cnf_left'] + avail['rac_left'] + avail['wl_left']
     if total_passengers > available_total_capacity:
-        return False, f"Not enough seats available. Max available: {available_total_capacity}"
+        quota_label = "Tatkal" if quota == 'TQ' else "General"
+        return False, f"Not enough seats available in {quota_label} quota. Max available: {available_total_capacity}"
         
     pnr = generate_pnr()
     booking = Booking(
@@ -363,7 +413,7 @@ def book_ticket(user_id, train_id, from_station_id, to_station_id, journey_date,
     coach_prefix = COACH_PREFIXES.get(travel_class, 'B')
     
     for p_idx, p_data in enumerate(passengers_data):
-        current_avail = get_class_availability(train_id, journey_date, travel_class)
+        current_avail = get_class_availability(train_id, journey_date, travel_class, quota=quota)
         
         status = ''
         coach_no = None
@@ -376,8 +426,12 @@ def book_ticket(user_id, train_id, from_station_id, to_station_id, journey_date,
         
         if current_avail['cnf_left'] > 0:
             status = 'CNF'
-            allocated_seat_index = current_avail['cnf_count']
-            
+            if quota == 'TQ':
+                # Tatkal CNF allocated from reserved seat partition
+                allocated_seat_index = current_avail['general_quota_seats'] + current_avail['cnf_count']
+            else:
+                allocated_seat_index = current_avail['cnf_count']
+                
             # Find preferred berth type seat
             seat_no, berth_type = find_preferred_seat_number(travel_class, allocated_seat_index, p_pref, p_age)
             coach_num = ((seat_no - 1) // 72) + 1
@@ -391,17 +445,18 @@ def book_ticket(user_id, train_id, from_station_id, to_station_id, journey_date,
         else:
             status = 'WL'
             rac_wl_num = current_avail['wl_count'] + 1
-            coach_no = 'WL'
+            coach_no = 'TQWL' if quota == 'TQ' else 'WL'
             seat_no = None
             berth_type = 'No Berth Allocated'
             
+        b_status_str = f"TQWL / {rac_wl_num}" if (quota == 'TQ' and status == 'WL') else (f"{status} / {rac_wl_num}" if rac_wl_num else "CNF")
         passenger = Passenger(
             booking_id=booking.id,
             name=p_data['name'],
             age=p_age,
             gender=p_data['gender'],
             berth_preference=p_pref,
-            booking_status=f"{status} / {rac_wl_num}" if rac_wl_num else "CNF",
+            booking_status=b_status_str,
             current_status=status,
             coach_no=coach_no,
             seat_no=seat_no,

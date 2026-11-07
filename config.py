@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from datetime import timedelta
 from dotenv import load_dotenv
 
 # Load environment variables from .env file (if present)
@@ -9,6 +10,9 @@ load_dotenv(basedir / '.env')
 class Config:
     # Flask Secret Key
     SECRET_KEY = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
+
+    # Session timeout configuration (5 minutes of inactivity auto-logout)
+    PERMANENT_SESSION_LIFETIME = timedelta(minutes=5)
 
     # MySQL connection parameters (loaded strictly from environment variables)
     MYSQL_HOST = os.getenv('MYSQL_HOST')

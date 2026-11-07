@@ -51,8 +51,8 @@ class TestIRCTCEngine(unittest.TestCase):
         r3 = RouteStation(train_id=t.id, station_id=s3.id, stop_number=3, distance_km=630.0, arrival_time='14:00')
         db.session.add_all([r1, r2, r3])
 
-        # Create Low Capacity Quotas: 4 CNF, 1 RAC, 1 WL for testing
-        q = CoachQuotaConfig(train_id=t.id, travel_class='3A', total_cnf_seats=4, total_rac_seats=1, total_wl_seats=1, base_fare_per_km=1.8)
+        # Create Capacity: 6 CNF (4 General CNF + 2 Tatkal CNF), 1 RAC, 1 WL for testing
+        q = CoachQuotaConfig(train_id=t.id, travel_class='3A', total_cnf_seats=6, total_rac_seats=1, total_wl_seats=1, base_fare_per_km=1.8)
         db.session.add(q)
         db.session.commit()
 
@@ -257,7 +257,7 @@ class TestIRCTCEngine(unittest.TestCase):
         self.assertIsNone(Booking.query.filter_by(pnr='9999999992').first())
         self.assertIsNotNone(Booking.query.filter_by(pnr='9999999991').first())
 
-    def test_auto_chart_creation_12_hours_before_departure(self):
+    def test_auto_chart_creation_8_hours_before_departure(self):
         from datetime import datetime, time
         from services.chart_service import check_and_auto_prepare_charts, get_upcoming_train_chart_statuses
         from models import ChartLog
@@ -272,17 +272,17 @@ class TestIRCTCEngine(unittest.TestCase):
         self.assertFalse(b.chart_prepared)
 
         # Express Special departs at 06:00 (stop 1)
-        # Case A: Simulated time is 18 hours before departure (yesterday 12:00 PM) -> Target date should NOT chart
-        time_18h_before = datetime.combine(target_date - timedelta(days=1), time(12, 0, 0))
-        res_early = check_and_auto_prepare_charts(hours_before=12, now=time_18h_before)
+        # Case A: Simulated time is 12 hours before departure (yesterday 18:00 PM) -> Target date should NOT chart with 8h rule
+        time_12h_before = datetime.combine(target_date - timedelta(days=1), time(18, 0, 0))
+        res_early = check_and_auto_prepare_charts(hours_before=8, now=time_12h_before)
         target_charted_early = [c for c in res_early['charts_created'] if c['journey_date'] == target_date.strftime('%Y-%m-%d')]
         self.assertEqual(len(target_charted_early), 0)
         db.session.refresh(b)
         self.assertFalse(b.chart_prepared)
 
-        # Case B: Simulated time is 10 hours before departure (yesterday 20:00 PM, <= 12 hours) -> MUST auto-chart!
-        time_10h_before = datetime.combine(target_date - timedelta(days=1), time(20, 0, 0))
-        res_due = check_and_auto_prepare_charts(hours_before=12, now=time_10h_before)
+        # Case B: Simulated time is 6 hours before departure (today 00:00 AM, <= 8 hours) -> MUST auto-chart!
+        time_6h_before = datetime.combine(target_date, time(0, 0, 0))
+        res_due = check_and_auto_prepare_charts(hours_before=8, now=time_6h_before)
         target_charted_due = [c for c in res_due['charts_created'] if c['journey_date'] == target_date.strftime('%Y-%m-%d')]
         self.assertEqual(len(target_charted_due), 1)
 
@@ -292,7 +292,7 @@ class TestIRCTCEngine(unittest.TestCase):
         self.assertIsNotNone(chart_log)
 
         # Case C: Idempotent - re-running should not create duplicate charts
-        res_repeat = check_and_auto_prepare_charts(hours_before=12, now=time_10h_before)
+        res_repeat = check_and_auto_prepare_charts(hours_before=8, now=time_6h_before)
         target_charted_repeat = [c for c in res_repeat['charts_created'] if c['journey_date'] == target_date.strftime('%Y-%m-%d')]
         self.assertEqual(len(target_charted_repeat), 0)
 
@@ -337,6 +337,72 @@ class TestIRCTCEngine(unittest.TestCase):
         resp_view = self.client.get(f'/admin/chart/view/{chart_log.id}')
         self.assertEqual(resp_view.status_code, 200)
         self.assertIn(b'OFFICIAL PASSENGER RESERVATION CHART', resp_view.data)
+
+    def test_tatkal_30_percent_quota_reservation(self):
+        """Requirement 4: Verify 30% seats are reserved for Tatkal quota."""
+        journey_date = date.today() + timedelta(days=2)
+        avail_gn = get_class_availability(self.train_id, journey_date, '3A', quota='GN')
+        avail_tq = get_class_availability(self.train_id, journey_date, '3A', quota='TQ')
+
+        # Total CNF = 6. Tatkal = 30% of 6 = 2. General = 6 - 2 = 4.
+        self.assertEqual(avail_tq['total_cnf'], 2)
+        self.assertEqual(avail_gn['total_cnf'], 4)
+        self.assertEqual(avail_gn['tatkal_reserved_seats'], 2)
+        self.assertEqual(avail_gn['general_quota_seats'], 4)
+
+    def test_delete_old_booking_history(self):
+        """Requirement 1: Verify delete_old_booking_history purges records older than 5 days."""
+        from datetime import datetime
+        from services.booking_service import delete_old_booking_history
+
+        old_b = Booking(
+            user_id=self.user_id,
+            train_id=self.train_id,
+            from_station_id=self.s1_id,
+            to_station_id=self.s3_id,
+            journey_date=date.today() - timedelta(days=7),
+            travel_class='3A',
+            quota='GN',
+            pnr='1112223334',
+            booking_time=datetime.utcnow() - timedelta(days=6),
+            total_fare=500.0,
+            status='CONFIRMED'
+        )
+        recent_b = Booking(
+            user_id=self.user_id,
+            train_id=self.train_id,
+            from_station_id=self.s1_id,
+            to_station_id=self.s3_id,
+            journey_date=date.today() + timedelta(days=2),
+            travel_class='3A',
+            quota='GN',
+            pnr='1112223335',
+            booking_time=datetime.utcnow() - timedelta(days=2),
+            total_fare=500.0,
+            status='CONFIRMED'
+        )
+        db.session.add_all([old_b, recent_b])
+        db.session.commit()
+
+        purged = delete_old_booking_history(days=5)
+        self.assertGreaterEqual(purged, 1)
+        self.assertIsNone(Booking.query.filter_by(pnr='1112223334').first())
+        self.assertIsNotNone(Booking.query.filter_by(pnr='1112223335').first())
+
+    def test_5_minute_inactivity_timeout_policy(self):
+        """Requirement 8: Verify auto log off after 5 minutes of inactivity."""
+        from datetime import datetime
+        with self.client.session_transaction() as sess:
+            sess['user_id'] = self.user_id
+            sess['username'] = 'testuser'
+            sess['role'] = 'user'
+            # Simulated inactivity: last activity was 305 seconds ago (> 300 seconds)
+            sess['last_activity'] = datetime.utcnow().timestamp() - 305
+
+        resp = self.client.get('/my-bookings', follow_redirects=False)
+        # Should redirect to login with reason=timeout
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn('/login?reason=timeout', resp.location)
 
 if __name__ == '__main__':
     unittest.main()

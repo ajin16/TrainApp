@@ -13,12 +13,44 @@
                     <p class="small text-white-50 mb-0">Enter your credentials to access tickets & bookings</p>
                 </div>
                 <div class="card-body p-4">
-                    <form method="POST" action="{{ url_for('auth.login') }}">
+                    <div class="mb-4 p-3 bg-light rounded-3 border">
+                        <label class="form-label fw-bold text-dark small mb-2 d-flex align-items-center justify-content-between">
+                            <span><i class="fa-solid fa-wand-magic-sparkles text-primary me-1"></i> 1-Click Auto-Populate Login:</span>
+                            <span class="badge bg-primary-subtle text-primary border border-primary-subtle">Quick Fill</span>
+                        </label>
+                        <select class="form-select form-select-sm mb-2" id="quickAccountSelect" onchange="handleQuickSelect(this.value)">
+                            <option value="">-- Select an account to auto-fill --</option>
+                            <option value="admin|qwertyuiop">👑 Chief Admin (admin / qwertyuiop)</option>
+                            <option value="south_admin|qwertyuiop">🛡️ Southern Railway Admin (south_admin / qwertyuiop)</option>
+                            <option value="anand|user123">👤 Passenger: Anand Kumar (anand / user123)</option>
+                            <option value="karthik|user123">👤 Passenger: Karthik Raja (karthik / user123)</option>
+                            <option value="lakshmi|user123">👤 Passenger: Lakshmi Priya (lakshmi / user123)</option>
+                        </select>
+                        <div class="d-flex flex-wrap gap-1">
+                            <button type="button" class="btn btn-sm btn-outline-primary py-0 px-2 rounded-pill" onclick="autoFill('admin', 'qwertyuiop')">
+                                <i class="fa-solid fa-crown me-1"></i> Admin
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-primary py-0 px-2 rounded-pill" onclick="autoFill('south_admin', 'qwertyuiop')">
+                                <i class="fa-solid fa-shield-halved me-1"></i> South Admin
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2 rounded-pill" onclick="autoFill('anand', 'user123')">
+                                Anand
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2 rounded-pill" onclick="autoFill('karthik', 'user123')">
+                                Karthik
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2 rounded-pill" onclick="autoFill('lakshmi', 'user123')">
+                                Lakshmi
+                            </button>
+                        </div>
+                    </div>
+
+                    <form method="POST" action="{{ url_for('auth.login') }}" id="loginForm">
                         <div class="mb-3">
                             <label class="form-label fw-semibold">Username or Email</label>
                             <div class="input-group">
                                 <span class="input-group-text bg-light"><i class="fa-solid fa-user text-muted"></i></span>
-                                <input type="text" name="username_or_email" class="form-control" placeholder="Enter username or email" required>
+                                <input type="text" name="username_or_email" id="username_or_email" class="form-control" placeholder="Enter username or email" required>
                             </div>
                         </div>
 
@@ -26,7 +58,7 @@
                             <label class="form-label fw-semibold">Password</label>
                             <div class="input-group">
                                 <span class="input-group-text bg-light"><i class="fa-solid fa-key text-muted"></i></span>
-                                <input type="password" name="password" class="form-control" placeholder="Enter password" required>
+                                <input type="password" name="password" id="password" class="form-control" placeholder="Enter password" required>
                             </div>
                         </div>
 
@@ -38,8 +70,9 @@
                     <div class="alert alert-info border-0 rounded-3 mb-0 small">
                         <i class="fa-solid fa-lightbulb me-1 text-warning"></i> <strong>Quick Test Credentials:</strong>
                         <ul class="mb-0 ps-3 mt-1">
-                            <li><strong>Admin Privileges:</strong> <code>admin</code> / <code>admin123</code> or <code>south_admin</code> / <code>admin123</code></li>
-                            <li><strong>Passengers:</strong> <code>anand</code>, <code>karthik</code>, <code>lakshmi</code>, <code>passenger</code> / <code>user123</code></li>
+                            <li><strong>Chief Admin:</strong> <code>admin</code> / <code>qwertyuiop</code></li>
+                            <li><strong>Southern Admin:</strong> <code>south_admin</code> / <code>qwertyuiop</code></li>
+                            <li><strong>Passengers:</strong> <code>anand</code>, <code>karthik</code>, <code>lakshmi</code> / <code>user123</code></li>
                         </ul>
                     </div>
                 </div>
@@ -51,4 +84,31 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function autoFill(user, pass) {
+        const userInput = document.getElementById('username_or_email');
+        const passInput = document.getElementById('password');
+        if (userInput && passInput) {
+            userInput.value = user;
+            passInput.value = pass;
+            userInput.classList.add('bg-warning-subtle');
+            passInput.classList.add('bg-warning-subtle');
+            setTimeout(() => {
+                userInput.classList.remove('bg-warning-subtle');
+                passInput.classList.remove('bg-warning-subtle');
+            }, 500);
+        }
+    }
+
+    function handleQuickSelect(val) {
+        if (!val) return;
+        const parts = val.split('|');
+        if (parts.length === 2) {
+            autoFill(parts[0], parts[1]);
+        }
+    }
+</script>
 {% endblock %}

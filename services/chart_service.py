@@ -2,13 +2,13 @@ import os
 from datetime import datetime, date, timedelta, time
 from models import db, Booking, Passenger, ChartLog, Train, RouteStation
 
-# IRCTC 12-Hour Auto-Charting Constant
-AUTO_CHART_HOURS_BEFORE = 12
+# IRCTC 8-Hour Auto-Charting Constant
+AUTO_CHART_HOURS_BEFORE = 8
 
 def prepare_reservation_chart(train_id, journey_date, trigger_type='MANUAL'):
     """
     Simulates IRCTC Reservation Chart Preparation:
-    - Triggered automatically 12 hours before origin departure (or manually by admin).
+    - Triggered automatically 8 hours before origin departure (or manually by admin).
     - Checks if chart is already prepared (idempotent).
     - Locks all bookings for this train run (chart_prepared = True).
     - Finalizes seat assignments for RAC passengers.
@@ -117,7 +117,7 @@ def check_and_auto_prepare_charts(hours_before=AUTO_CHART_HOURS_BEFORE, now=None
     """
     Automated Charting Engine:
     Scans upcoming train departures and automatically creates reservation charts
-    for any train departing within the next `hours_before` hours (default 12 hours)
+    for any train departing within the next `hours_before` hours (default 8 hours)
     that has not yet been charted.
     
     Returns a dict with execution timestamp, count, and reports of charts created.

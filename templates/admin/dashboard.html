@@ -12,11 +12,11 @@
                 <span class="badge bg-warning text-dark me-2 fs-6"><i class="fa-solid fa-shield-halved me-1"></i> Admin</span>
                 <h3 class="fw-bold mb-0 text-dark">IRCTC Operations Control Center</h3>
             </div>
-            <p class="text-muted small mb-0 mt-1">Live Train Operations, Automatic 12-Hour Charting Engine & Revenue Analytics</p>
+            <p class="text-muted small mb-0 mt-1">Live Train Operations, Automatic 8-Hour Charting Engine & Revenue Analytics</p>
         </div>
         <div class="d-flex flex-wrap gap-2">
             <a href="{{ url_for('admin.trigger_auto_chart') }}" class="btn btn-warning btn-sm fw-bold shadow-sm">
-                <i class="fa-solid fa-bolt me-1"></i> Run 12-Hour Auto-Chart Now
+                <i class="fa-solid fa-bolt me-1"></i> Run 8-Hour Auto-Chart Now
             </a>
             <a href="{{ url_for('admin.chart_prepare') }}" class="btn btn-primary btn-sm">
                 <i class="fa-solid fa-clipboard-check me-1"></i> Charting Center
@@ -40,7 +40,7 @@
                 <div>
                     <strong>Automated Reservation Charting Engine: Active (T-{{ auto_chart_hours }} Hours Rule)</strong>
                     <div class="small text-muted">
-                        Charts are automatically prepared <strong>12 hours before train origin departure</strong>. Confirms RAC berths, auto-cancels unconfirmed waitlists with refund, and locks bookings.
+                        Charts are automatically prepared <strong>{{ auto_chart_hours }} hours before train origin departure</strong>. Confirms RAC berths, auto-cancels unconfirmed waitlists with refund, and locks bookings.
                     </div>
                 </div>
             </div>
@@ -94,12 +94,12 @@
         </div>
     </div>
 
-    <!-- Live Upcoming Train Departures & 12-Hour Charting Monitor Table -->
+    <!-- Live Upcoming Train Departures & 8-Hour Charting Monitor Table -->
     <div class="card shadow-sm border-0 rounded-3 mb-4 bg-white">
         <div class="card-header bg-irctc-gradient text-white fw-bold py-3 d-flex justify-content-between align-items-center">
             <div>
                 <i class="fa-solid fa-train-subway text-warning me-2"></i>
-                Upcoming Train Departures & 12-Hour Charting Monitor (Next 48 Hours)
+                Upcoming Train Departures & 8-Hour Charting Monitor (Next 48 Hours)
             </div>
             <a href="{{ url_for('admin.chart_prepare') }}" class="btn btn-warning btn-sm fw-bold">
                 View Full Charting Center <i class="fa-solid fa-arrow-right ms-1"></i>
@@ -121,7 +121,7 @@
                                 <th>Scheduled Departure</th>
                                 <th>Departure In</th>
                                 <th>Passenger Breakdown</th>
-                                <th>Chart Status (12h Rule)</th>
+                                <th>Chart Status ({{ auto_chart_hours }}h Rule)</th>
                                 <th>Action</th>
                             </tr>
                         </thead>

@@ -24,7 +24,7 @@ def admin_required(f):
 @admin_bp.route('/dashboard')
 @admin_required
 def dashboard():
-    # 1. Trigger automated 12-hour chart check on dashboard load
+    # 1. Trigger automated 8-hour chart check on dashboard load
     auto_result = check_and_auto_prepare_charts(hours_before=AUTO_CHART_HOURS_BEFORE)
 
     # 2. Key system analytics
@@ -43,7 +43,7 @@ def dashboard():
     today_start = datetime.combine(date.today(), time.min)
     charts_prepared_today = ChartLog.query.filter(ChartLog.prepared_at >= today_start).count()
 
-    # 3. Live 12-Hour Upcoming Train Departures & Charting Status
+    # 3. Live 8-Hour Upcoming Train Departures & Charting Status
     upcoming_schedules = get_upcoming_train_chart_statuses(hours_before=AUTO_CHART_HOURS_BEFORE, lookahead_days=2)
     due_for_charting_count = sum(1 for s in upcoming_schedules if s['status_code'] == 'DUE_NOW')
 
@@ -72,19 +72,19 @@ def dashboard():
 @admin_bp.route('/auto-chart', methods=['GET', 'POST'])
 @admin_required
 def trigger_auto_chart():
-    """Manual trigger to run the 12-Hour Auto-Charting Engine immediately."""
+    """Manual trigger to run the 8-Hour Auto-Charting Engine immediately."""
     result = check_and_auto_prepare_charts(hours_before=AUTO_CHART_HOURS_BEFORE)
     count = result['count']
 
     if count > 0:
         flash(
-            f"⚡ 12-Hour Auto-Charting Engine Triggered: Successfully generated {count} reservation "
+            f"⚡ {AUTO_CHART_HOURS_BEFORE}-Hour Auto-Charting Engine Triggered: Successfully generated {count} reservation "
             f"chart(s) for upcoming departures!",
             "success"
         )
     else:
         flash(
-            f"12-Hour Auto-Charting Engine checked: All upcoming trains departing within {AUTO_CHART_HOURS_BEFORE} "
+            f"{AUTO_CHART_HOURS_BEFORE}-Hour Auto-Charting Engine checked: All upcoming trains departing within {AUTO_CHART_HOURS_BEFORE} "
             f"hours already have finalized reservation charts.",
             "info"
         )

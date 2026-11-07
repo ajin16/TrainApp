@@ -1,3 +1,4 @@
+from datetime import datetime
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session
 from models import db, User
 
@@ -12,10 +13,12 @@ def login():
         user = User.query.filter((User.username == username_or_email) | (User.email == username_or_email)).first()
         
         if user and user.check_password(password):
+            session.permanent = True
             session['user_id'] = user.id
             session['username'] = user.username
             session['full_name'] = user.full_name
             session['role'] = user.role
+            session['last_activity'] = datetime.utcnow().timestamp()
             
             flash(f"Welcome back, {user.full_name}!", "success")
             if user.role == 'admin':
@@ -70,6 +73,10 @@ def register():
 
 @auth_bp.route('/logout')
 def logout():
+    reason = request.args.get('reason')
     session.clear()
+    if reason == 'timeout':
+        flash("You have been automatically logged out due to 5 minutes of inactivity.", "warning")
+        return redirect(url_for('auth.login', reason='timeout'))
     flash("You have been logged out.", "info")
     return redirect(url_for('user.index'))

@@ -162,8 +162,8 @@
                 <div class="col-md-4">
                     <h6 class="text-light fw-semibold mb-2">System Accounts</h6>
                     <p class="small text-white-50 mb-1">
-                        <strong>Chief Admin:</strong> <code>admin</code> / <code>admin123</code><br>
-                        <strong>Southern Railway Admin:</strong> <code>south_admin</code> / <code>admin123</code><br>
+                        <strong>Chief Admin:</strong> <code>admin</code> / <code>qwertyuiop</code><br>
+                        <strong>Southern Railway Admin:</strong> <code>south_admin</code> / <code>qwertyuiop</code><br>
                         <strong>Passenger Users:</strong> <code>anand</code>, <code>karthik</code>, <code>lakshmi</code> / <code>user123</code>
                     </p>
                 </div>
@@ -195,6 +195,28 @@
                 el.innerHTML = `<i class="fa-regular fa-clock me-1 text-warning"></i> ${timeStr}`;
             }
         }, 1000);
+
+        {% if session.get('user_id') %}
+        // Requirement 8: Inactivity Auto-Logout Tracker (5 minutes = 300 seconds)
+        (function() {
+            const INACTIVITY_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes = 300,000 ms
+            let idleTimer;
+
+            function resetIdleTimer() {
+                clearTimeout(idleTimer);
+                idleTimer = setTimeout(function() {
+                    window.location.href = "{{ url_for('auth.logout', reason='timeout') }}";
+                }, INACTIVITY_TIMEOUT_MS);
+            }
+
+            // Events that register user activity
+            ['mousemove', 'keydown', 'mousedown', 'scroll', 'touchstart'].forEach(function(evt) {
+                window.addEventListener(evt, resetIdleTimer, { passive: true });
+            });
+
+            resetIdleTimer();
+        })();
+        {% endif %}
     </script>
     {% block scripts %}{% endblock %}
 </body>
