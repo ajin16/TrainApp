@@ -96,7 +96,7 @@
                             {% for b in bookings %}
                                 <tr>
                                     <td>
-                                        <a href="{{ url_for('user.ticket_detail', booking_id=b.id) }}" class="text-decoration-none" target="_blank">
+                                        <a href="{{ url_for('admin.booking_detail', booking_id=b.id) }}" class="text-decoration-none">
                                             <span class="badge bg-dark text-warning fs-6">{{ b.pnr }}</span>
                                         </a>
                                     </td>
@@ -106,7 +106,7 @@
                                     </td>
                                     <td>{{ b.user.username }}</td>
                                     <td>
-                                        <small class="fw-semibold">{{ b.from_station.code }} $\rightarrow$ {{ b.to_station.code }}</small>
+                                        <small class="fw-semibold">{{ b.from_station.code }} &rarr; {{ b.to_station.code }}</small>
                                     </td>
                                     <td><strong>{{ b.journey_date.strftime('%d-%b-%Y') }}</strong></td>
                                     <td><span class="badge bg-secondary">{{ b.travel_class }} | {{ b.quota }}</span></td>
@@ -133,8 +133,8 @@
                                         {% endif %}
                                     </td>
                                     <td>
-                                        <a href="{{ url_for('user.ticket_detail', booking_id=b.id) }}" class="btn btn-sm btn-outline-primary" target="_blank">
-                                            <i class="fa-solid fa-eye me-1"></i> Ticket
+                                        <a href="{{ url_for('admin.booking_detail', booking_id=b.id) }}" class="btn btn-sm btn-outline-primary">
+                                            <i class="fa-solid fa-magnifying-glass me-1"></i> Audit PNR
                                         </a>
                                     </td>
                                 </tr>

@@ -422,6 +422,67 @@ class TestIRCTCEngine(unittest.TestCase):
         # Ensure all assigned seat numbers are strictly unique!
         self.assertEqual(len(seat_numbers), len(set(seat_numbers)))
 
+    def test_intermediate_station_train_search(self):
+        """Verify train search between two stations other than starting and ending stations."""
+        journey_date = date.today() + timedelta(days=2)
+        
+        # Test seed has NDLS (stop 1, 0km) -> CNB (stop 2, 440km) -> PRYJ (stop 3, 630km)
+        # 1. Search intermediate station CNB to PRYJ by station codes
+        results, from_st, to_st = search_trains('CNB', 'PRYJ', journey_date)
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]['distance_km'], 190.0)  # 630 - 440 = 190 km
+        self.assertEqual(results[0]['src_route'].station.code, 'CNB')
+        self.assertEqual(results[0]['dst_route'].station.code, 'PRYJ')
+        self.assertTrue(results[0]['is_intermediate'])
+        self.assertEqual(results[0]['intermediate_halts'], 0)
+
+        # 2. Search intermediate station by station name / city
+        results_by_name, f_st, t_st = search_trains('Kanpur Central', 'Prayagraj', journey_date)
+        self.assertEqual(len(results_by_name), 1)
+        self.assertEqual(results_by_name[0]['distance_km'], 190.0)
+
+    def test_admin_portal_routes_and_no_user_privileges(self):
+        """Verify admin portal features (stations, users, policies) and denial of booking privileges."""
+        with self.client.session_transaction() as sess:
+            sess['user_id'] = self.user_id
+            sess['role'] = 'admin'
+            sess['username'] = 'admin'
+
+        # 1. Station Master management
+        resp_stations = self.client.get('/admin/stations')
+        self.assertEqual(resp_stations.status_code, 200)
+        self.assertIn(b'Railway Station Master', resp_stations.data)
+
+        # Add new station via POST
+        resp_add_st = self.client.post('/admin/stations', data={
+            'code': 'BPL',
+            'name': 'Bhopal Junction',
+            'city': 'Bhopal',
+            'state': 'Madhya Pradesh'
+        }, follow_redirects=True)
+        self.assertEqual(resp_add_st.status_code, 200)
+        self.assertIsNotNone(Station.query.filter_by(code='BPL').first())
+
+        # 2. User registry
+        resp_users = self.client.get('/admin/users')
+        self.assertEqual(resp_users.status_code, 200)
+        self.assertIn(b'System User & Access Registry', resp_users.data)
+
+        # 3. System policies console
+        resp_policies = self.client.get('/admin/policies')
+        self.assertEqual(resp_policies.status_code, 200)
+        self.assertIn(b'System Policies & Background Daemons', resp_policies.data)
+
+        # 4. Verify admin accounts are blocked from user booking flow
+        resp_book = self.client.get(f'/book/{self.train_id}', follow_redirects=False)
+        self.assertEqual(resp_book.status_code, 302)
+        self.assertIn('/admin/dashboard', resp_book.location)
+
+        # 5. Verify admin accounts visiting /my-bookings are redirected to bookings ledger
+        resp_my_bookings = self.client.get('/my-bookings', follow_redirects=False)
+        self.assertEqual(resp_my_bookings.status_code, 302)
+        self.assertIn('/admin/bookings', resp_my_bookings.location)
+
 if __name__ == '__main__':
     unittest.main()
 

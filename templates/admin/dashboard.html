@@ -1,32 +1,59 @@
 {% extends 'base.html' %}
 
-{% block title %}Admin Control Center - IRCTC Operations Dashboard{% endblock %}
+{% block title %}Operations Control Center - IRCTC Admin Portal{% endblock %}
 
 {% block content %}
 <div class="container py-4">
 
-    <!-- Admin Nav Header -->
+    <!-- Official IRCTC Admin Control Header -->
     <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
         <div>
             <div class="d-flex align-items-center">
-                <span class="badge bg-warning text-dark me-2 fs-6"><i class="fa-solid fa-shield-halved me-1"></i> Admin</span>
-                <h3 class="fw-bold mb-0 text-dark">IRCTC Operations Control Center</h3>
+                <span class="badge bg-warning text-dark me-2 fs-6"><i class="fa-solid fa-shield-halved me-1"></i> IRCTC OCC</span>
+                <h3 class="fw-bold mb-0 text-dark">Operations Control Center</h3>
+                <span class="badge bg-dark text-white ms-2">Central Management Portal</span>
             </div>
-            <p class="text-muted small mb-0 mt-1">Live Train Operations, Automatic 8-Hour Charting Engine & Revenue Analytics</p>
+            <p class="text-muted small mb-0 mt-1">Real-Time Train Monitoring, 8-Hour Auto-Charting Engine, Fleet Quotas & Central Reservation Audits</p>
         </div>
         <div class="d-flex flex-wrap gap-2">
-            <a href="{{ url_for('admin.trigger_auto_chart') }}" class="btn btn-warning btn-sm fw-bold shadow-sm">
-                <i class="fa-solid fa-bolt me-1"></i> Run 8-Hour Auto-Chart Now
-            </a>
-            <a href="{{ url_for('admin.chart_prepare') }}" class="btn btn-primary btn-sm">
-                <i class="fa-solid fa-clipboard-check me-1"></i> Charting Center
+            <a href="{{ url_for('admin.trigger_auto_chart') }}" class="btn btn-warning btn-sm fw-bold shadow-xs">
+                <i class="fa-solid fa-bolt me-1"></i> Trigger Auto-Chart Now
             </a>
             <a href="{{ url_for('admin.trains') }}" class="btn btn-outline-primary btn-sm">
-                <i class="fa-solid fa-train me-1"></i> Manage Trains
+                <i class="fa-solid fa-plus me-1"></i> Add / Manage Trains
             </a>
-            <a href="{{ url_for('admin.bookings_list') }}" class="btn btn-outline-secondary btn-sm">
-                <i class="fa-solid fa-list me-1"></i> All Bookings
+            <a href="{{ url_for('admin.stations') }}" class="btn btn-outline-secondary btn-sm">
+                <i class="fa-solid fa-building-columns me-1"></i> Station Master
             </a>
+        </div>
+    </div>
+
+    <!-- Quick Navigation Sub-Bar (Feature Modules) -->
+    <div class="card shadow-sm border-0 rounded-3 mb-4 bg-white">
+        <div class="card-body p-2">
+            <div class="d-flex flex-wrap gap-2">
+                <a href="{{ url_for('admin.dashboard') }}" class="btn btn-primary btn-sm fw-bold">
+                    <i class="fa-solid fa-gauge-high me-1"></i> 1. Operations Overview
+                </a>
+                <a href="{{ url_for('admin.trains') }}" class="btn btn-light btn-sm text-dark border">
+                    <i class="fa-solid fa-train me-1 text-primary"></i> 2. Fleet & Timetables
+                </a>
+                <a href="{{ url_for('admin.stations') }}" class="btn btn-light btn-sm text-dark border">
+                    <i class="fa-solid fa-building-columns me-1 text-primary"></i> 3. Station Master
+                </a>
+                <a href="{{ url_for('admin.chart_prepare') }}" class="btn btn-light btn-sm text-dark border">
+                    <i class="fa-solid fa-clipboard-check me-1 text-warning"></i> 4. Charting Operations
+                </a>
+                <a href="{{ url_for('admin.bookings_list') }}" class="btn btn-light btn-sm text-dark border">
+                    <i class="fa-solid fa-receipt me-1 text-success"></i> 5. Central Bookings Ledger
+                </a>
+                <a href="{{ url_for('admin.users_list') }}" class="btn btn-light btn-sm text-dark border">
+                    <i class="fa-solid fa-users-gear me-1 text-info"></i> 6. User Registry
+                </a>
+                <a href="{{ url_for('admin.policies') }}" class="btn btn-light btn-sm text-dark border">
+                    <i class="fa-solid fa-gears me-1 text-secondary"></i> 7. System Policies
+                </a>
+            </div>
         </div>
     </div>
 
@@ -38,9 +65,9 @@
                     <i class="fa-solid fa-clock-rotate-left fa-lg"></i>
                 </span>
                 <div>
-                    <strong>Automated Reservation Charting Engine: Active (T-{{ auto_chart_hours }} Hours Rule)</strong>
+                    <strong>Automated 8-Hour Charting Engine: Active (T-{{ auto_chart_hours }} Hours Rule)</strong>
                     <div class="small text-muted">
-                        Charts are automatically prepared <strong>{{ auto_chart_hours }} hours before train origin departure</strong>. Confirms RAC berths, auto-cancels unconfirmed waitlists with refund, and locks bookings.
+                        Charts are automatically finalized <strong>{{ auto_chart_hours }} hours before train origin departure</strong>. Confirms RAC berths, auto-cancels unconfirmed waitlists with full refund, and locks bookings.
                     </div>
                 </div>
             </div>
@@ -58,18 +85,18 @@
         </div>
     </div>
 
-    <!-- Analytics Metric Cards -->
+    <!-- Section 1: Executive KPI Metrics Ribbon -->
     <div class="row g-3 mb-4">
         <div class="col-md-3">
             <div class="card shadow-sm border-0 rounded-3 bg-white p-3 border-start border-4 border-success h-100">
-                <small class="text-muted fw-bold text-uppercase">Total System Revenue</small>
+                <small class="text-muted fw-bold text-uppercase">Total Network Revenue</small>
                 <h3 class="fw-bold text-success mb-0 mt-1">₹{{ "%.2f"|format(total_revenue) }}</h3>
-                <small class="text-muted" style="font-size: 0.75rem;">From active bookings</small>
+                <small class="text-muted" style="font-size: 0.75rem;">From non-cancelled bookings</small>
             </div>
         </div>
         <div class="col-md-3">
             <div class="card shadow-sm border-0 rounded-3 bg-white p-3 border-start border-4 border-primary h-100">
-                <small class="text-muted fw-bold text-uppercase">Total Bookings & Pax</small>
+                <small class="text-muted fw-bold text-uppercase">Total Bookings & Pax Load</small>
                 <h3 class="fw-bold text-primary mb-0 mt-1">{{ total_bookings }}</h3>
                 <div class="mt-1 small">
                     <span class="badge bg-success me-1">CNF: {{ total_cnf }}</span>
@@ -80,9 +107,9 @@
         </div>
         <div class="col-md-3">
             <div class="card shadow-sm border-0 rounded-3 bg-white p-3 border-start border-4 border-info h-100">
-                <small class="text-muted fw-bold text-uppercase">Active Trains & Stations</small>
+                <small class="text-muted fw-bold text-uppercase">Active Fleet & Stations</small>
                 <h3 class="fw-bold text-dark mb-0 mt-1">{{ total_trains }} <span class="fs-6 fw-normal text-muted">/ {{ total_stations }} stations</span></h3>
-                <small class="text-muted" style="font-size: 0.75rem;">Registered passengers: {{ total_users }}</small>
+                <small class="text-muted" style="font-size: 0.75rem;">Registered users: {{ total_users }}</small>
             </div>
         </div>
         <div class="col-md-3">
@@ -94,12 +121,12 @@
         </div>
     </div>
 
-    <!-- Live Upcoming Train Departures & 8-Hour Charting Monitor Table -->
+    <!-- Section 2: Automated 8-Hour Charting & Upcoming Train Runs Monitor -->
     <div class="card shadow-sm border-0 rounded-3 mb-4 bg-white">
         <div class="card-header bg-irctc-gradient text-white fw-bold py-3 d-flex justify-content-between align-items-center">
             <div>
-                <i class="fa-solid fa-train-subway text-warning me-2"></i>
-                Upcoming Train Departures & 8-Hour Charting Monitor (Next 48 Hours)
+                <i class="fa-solid fa-clock-rotate-left text-warning me-2"></i>
+                FEATURE 1: Upcoming Train Departures & 8-Hour Auto-Charting Monitor (Next 48 Hours)
             </div>
             <a href="{{ url_for('admin.chart_prepare') }}" class="btn btn-warning btn-sm fw-bold">
                 View Full Charting Center <i class="fa-solid fa-arrow-right ms-1"></i>
@@ -112,17 +139,17 @@
                 </div>
             {% else %}
                 <div class="table-responsive">
-                    <table class="table table-hover align-middle mb-0">
+                    <table class="table table-hover align-middle mb-0 small">
                         <thead class="table-light">
                             <tr>
                                 <th>Train</th>
                                 <th>Route</th>
                                 <th>Journey Date</th>
-                                <th>Scheduled Departure</th>
-                                <th>Departure In</th>
+                                <th>Origin Departure</th>
+                                <th>Time to Departure</th>
                                 <th>Passenger Breakdown</th>
-                                <th>Chart Status ({{ auto_chart_hours }}h Rule)</th>
-                                <th>Action</th>
+                                <th>Status (T-{{ auto_chart_hours }}h)</th>
+                                <th class="text-end">Operational Action</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -133,7 +160,7 @@
                                         <strong>{{ s.train_name }}</strong>
                                     </td>
                                     <td>
-                                        <small class="fw-semibold">{{ s.source_code }} $\rightarrow$ {{ s.dest_code }}</small>
+                                        <small class="fw-semibold">{{ s.source_code }} &rarr; {{ s.dest_code }}</small>
                                     </td>
                                     <td>{{ s.journey_date.strftime('%d-%b-%Y') }}</td>
                                     <td>
@@ -152,10 +179,10 @@
                                             {{ s.status_label }}
                                         </span>
                                     </td>
-                                    <td>
+                                    <td class="text-end">
                                         {% if s.chart_log %}
                                             <a href="{{ url_for('admin.chart_view', chart_log_id=s.chart_log.id) }}" class="btn btn-sm btn-outline-success">
-                                                <i class="fa-solid fa-receipt me-1"></i> View Chart
+                                                <i class="fa-solid fa-receipt me-1"></i> Station Slip
                                             </a>
                                         {% elif s.can_prepare %}
                                             <form method="POST" action="{{ url_for('admin.chart_prepare') }}" class="d-inline">
@@ -166,7 +193,7 @@
                                                 </button>
                                             </form>
                                         {% else %}
-                                            <span class="text-muted small">--</span>
+                                            <span class="text-muted small">Auto-scheduled</span>
                                         {% endif %}
                                     </td>
                                 </tr>
@@ -178,14 +205,14 @@
         </div>
     </div>
 
-    <!-- Row: Recent Transactions & Recent Chart Logs -->
-    <div class="row g-4">
-        <!-- Recent Bookings -->
+    <!-- Section 3 & 4: Recent Central Ledger Transactions & Recent Chart Logs -->
+    <div class="row g-4 mb-4">
+        <!-- Feature 2: Central Bookings Ledger -->
         <div class="col-lg-7">
             <div class="card shadow-sm border-0 rounded-3 bg-white h-100">
-                <div class="card-header bg-light fw-bold py-3 d-flex justify-content-between align-items-center">
-                    <span><i class="fa-solid fa-clock-rotate-left me-2 text-primary"></i> Recent Transactions</span>
-                    <a href="{{ url_for('admin.bookings_list') }}" class="btn btn-outline-secondary btn-sm">View All</a>
+                <div class="card-header bg-light fw-bold py-3 d-flex justify-content-between align-items-center border-bottom">
+                    <span><i class="fa-solid fa-receipt me-2 text-primary"></i> FEATURE 2: Central Reservation Ledger (Recent)</span>
+                    <a href="{{ url_for('admin.bookings_list') }}" class="btn btn-outline-primary btn-sm">Full Ledger &rarr;</a>
                 </div>
                 <div class="card-body p-0">
                     <div class="table-responsive">
@@ -194,17 +221,24 @@
                                 <tr>
                                     <th>PNR</th>
                                     <th>Train</th>
+                                    <th>Passenger User</th>
                                     <th>Date</th>
                                     <th>Class</th>
                                     <th>Fare</th>
                                     <th>Status</th>
+                                    <th>Action</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {% for b in recent_bookings %}
                                     <tr>
-                                        <td class="fw-bold text-primary">{{ b.pnr }}</td>
+                                        <td>
+                                            <a href="{{ url_for('admin.booking_detail', booking_id=b.id) }}" class="fw-bold text-primary text-decoration-none">
+                                                {{ b.pnr }}
+                                            </a>
+                                        </td>
                                         <td>{{ b.train.train_number }}</td>
+                                        <td>{{ b.user.username }}</td>
                                         <td>{{ b.journey_date.strftime('%d-%b') }}</td>
                                         <td><span class="badge bg-secondary">{{ b.travel_class }}</span></td>
                                         <td class="fw-bold text-success">₹{{ "%.2f"|format(b.total_fare) }}</td>
@@ -217,6 +251,11 @@
                                                 <span class="badge bg-secondary">CANCELLED</span>
                                             {% endif %}
                                         </td>
+                                        <td>
+                                            <a href="{{ url_for('admin.booking_detail', booking_id=b.id) }}" class="btn btn-xs btn-outline-primary py-0 px-2" style="font-size: 0.75rem;">
+                                                Audit
+                                            </a>
+                                        </td>
                                     </tr>
                                 {% endfor %}
                             </tbody>
@@ -226,16 +265,16 @@
             </div>
         </div>
 
-        <!-- Recent Chart Preparation Logs -->
+        <!-- Feature 3: Recent Reservation Charts -->
         <div class="col-lg-5">
             <div class="card shadow-sm border-0 rounded-3 bg-white h-100">
-                <div class="card-header bg-light fw-bold py-3 d-flex justify-content-between align-items-center">
-                    <span><i class="fa-solid fa-file-lines me-2 text-warning"></i> Recent Reservation Charts</span>
-                    <a href="{{ url_for('admin.chart_prepare') }}" class="btn btn-outline-secondary btn-sm">All Logs</a>
+                <div class="card-header bg-light fw-bold py-3 d-flex justify-content-between align-items-center border-bottom">
+                    <span><i class="fa-solid fa-clipboard-check me-2 text-warning"></i> FEATURE 3: Finalized Chart Archive</span>
+                    <a href="{{ url_for('admin.chart_prepare') }}" class="btn btn-outline-secondary btn-sm">All Charts &rarr;</a>
                 </div>
                 <div class="card-body p-0">
                     {% if not recent_chart_logs %}
-                        <div class="p-4 text-center text-muted small">No reservation charts prepared yet.</div>
+                        <div class="p-4 text-center text-muted small">No reservation charts finalized yet.</div>
                     {% else %}
                         <div class="table-responsive">
                             <table class="table table-hover align-middle mb-0 small">
@@ -244,21 +283,21 @@
                                         <th>Train</th>
                                         <th>Date</th>
                                         <th>CNF / RAC</th>
-                                        <th>Action</th>
+                                        <th class="text-end">Station Slip</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {% for log in recent_chart_logs %}
                                         <tr>
-                                            <td class="fw-bold">{{ log.train.train_number }}</td>
-                                            <td>{{ log.journey_date.strftime('%d-%b') }}</td>
+                                            <td class="fw-bold">{{ log.train.train_number }} - {{ log.train.name }}</td>
+                                            <td>{{ log.journey_date.strftime('%d-%b-%Y') }}</td>
                                             <td>
                                                 <span class="badge bg-success">{{ log.cnf_count }} CNF</span>
                                                 <span class="badge bg-warning text-dark">{{ log.rac_count }} RAC</span>
                                             </td>
-                                            <td>
+                                            <td class="text-end">
                                                 <a href="{{ url_for('admin.chart_view', chart_log_id=log.id) }}" class="btn btn-xs btn-outline-primary py-0 px-2" style="font-size: 0.75rem;">
-                                                    Slip
+                                                    <i class="fa-solid fa-file-lines me-1"></i> Slip
                                                 </a>
                                             </td>
                                         </tr>
@@ -267,6 +306,57 @@
                             </table>
                         </div>
                     {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Section 5: Fleet & Infrastructure Quick Command Cards -->
+    <div class="row g-3">
+        <div class="col-md-4">
+            <div class="card shadow-sm border-0 rounded-3 bg-white p-4 h-100">
+                <div class="d-flex align-items-center mb-3">
+                    <span class="badge bg-primary p-2 rounded-3 me-2"><i class="fa-solid fa-train fa-lg"></i></span>
+                    <h6 class="fw-bold mb-0 text-dark">Fleet & Route Manager</h6>
+                </div>
+                <p class="text-muted small">Configure train operating days, intermediate halt stations, arrival/departure timetables, and coach class capacities (1A, 2A, 3A, SL, CC, 2S).</p>
+                <div class="mt-auto">
+                    <a href="{{ url_for('admin.trains') }}" class="btn btn-outline-primary btn-sm w-100">
+                        <i class="fa-solid fa-gear me-1"></i> Manage Train Fleet
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card shadow-sm border-0 rounded-3 bg-white p-4 h-100">
+                <div class="d-flex align-items-center mb-3">
+                    <span class="badge bg-success p-2 rounded-3 me-2"><i class="fa-solid fa-building-columns fa-lg"></i></span>
+                    <h6 class="fw-bold mb-0 text-dark">Station Master Directory</h6>
+                </div>
+                <p class="text-muted small">Maintain network railway stations, commercial junction nodes, regional divisions, and official railway station codes across all zones.</p>
+                <div class="mt-auto">
+                    <a href="{{ url_for('admin.stations') }}" class="btn btn-outline-success btn-sm w-100">
+                        <i class="fa-solid fa-building-columns me-1"></i> Open Station Master
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card shadow-sm border-0 rounded-3 bg-white p-4 h-100">
+                <div class="d-flex align-items-center mb-3">
+                    <span class="badge bg-warning text-dark p-2 rounded-3 me-2"><i class="fa-solid fa-users-gear fa-lg"></i></span>
+                    <h6 class="fw-bold mb-0 text-dark">User & Policy Registry</h6>
+                </div>
+                <p class="text-muted small">Audit registered passenger accounts, administrative access roles, 5-day transaction retention health, and automated charting daemons.</p>
+                <div class="mt-auto d-flex gap-2">
+                    <a href="{{ url_for('admin.users_list') }}" class="btn btn-outline-dark btn-sm flex-grow-1">
+                        <i class="fa-solid fa-users me-1"></i> Users
+                    </a>
+                    <a href="{{ url_for('admin.policies') }}" class="btn btn-outline-secondary btn-sm flex-grow-1">
+                        <i class="fa-solid fa-gears me-1"></i> Policies
+                    </a>
                 </div>
             </div>
         </div>

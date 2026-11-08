@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session, jsonify
 from datetime import datetime, date, timedelta, time
-from models import db, Train, Station, RouteStation, CoachQuotaConfig, Booking, Passenger, ChartLog, User
+from models import db, Train, Station, RouteStation, CoachQuotaConfig, Booking, Passenger, ChartLog, User, utcnow
 from services.chart_service import (
     prepare_reservation_chart,
     check_and_auto_prepare_charts,
@@ -8,6 +8,9 @@ from services.chart_service import (
     get_full_passenger_chart,
     AUTO_CHART_HOURS_BEFORE
 )
+from services.cancellation_service import cancel_passengers, calculate_cancellation_refund
+from services.booking_service import archive_or_purge_old_transactions, delete_old_booking_history
+from services.ticket_service import get_ticket_summary
 
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
 
@@ -307,4 +310,151 @@ def bookings_list():
         pnr_query=pnr_query,
         status_filter=status_filter,
         class_filter=class_filter
+    )
+
+@admin_bp.route('/stations', methods=['GET', 'POST'])
+@admin_required
+def stations():
+    """Station Master Management: View network stations and add new stations."""
+    if request.method == 'POST':
+        code = request.form.get('code', '').strip().upper()
+        name = request.form.get('name', '').strip()
+        city = request.form.get('city', '').strip()
+        state = request.form.get('state', '').strip()
+
+        if not code or not name or not city or not state:
+            flash("All station fields (Code, Name, City, State) are required.", "warning")
+            return redirect(url_for('admin.stations'))
+
+        if Station.query.filter_by(code=code).first():
+            flash(f"Station with code '{code}' already exists in network master.", "danger")
+            return redirect(url_for('admin.stations'))
+
+        new_st = Station(code=code, name=name, city=city, state=state)
+        db.session.add(new_st)
+        db.session.commit()
+        flash(f"Station '{name} ({code})' added successfully to Railway Station Master!", "success")
+        return redirect(url_for('admin.stations'))
+
+    search_q = request.args.get('q', '').strip()
+    state_filter = request.args.get('state', '').strip()
+
+    query = Station.query
+    if search_q:
+        query = query.filter(
+            (Station.code.ilike(f"%{search_q}%")) |
+            (Station.name.ilike(f"%{search_q}%")) |
+            (Station.city.ilike(f"%{search_q}%"))
+        )
+    if state_filter:
+        query = query.filter_by(state=state_filter)
+
+    all_stations = query.order_by(Station.name).all()
+    all_states = sorted(list({s.state for s in Station.query.all() if s.state}))
+
+    return render_template(
+        'admin/stations.html',
+        stations=all_stations,
+        states=all_states,
+        search_q=search_q,
+        state_filter=state_filter,
+        total_count=len(all_stations)
+    )
+
+@admin_bp.route('/users')
+@admin_required
+def users_list():
+    """System User & Access Registry: Manage registered passenger and admin accounts."""
+    role_filter = request.args.get('role', '').strip()
+    search_q = request.args.get('q', '').strip()
+
+    query = User.query
+    if role_filter:
+        query = query.filter_by(role=role_filter)
+    if search_q:
+        query = query.filter(
+            (User.username.ilike(f"%{search_q}%")) |
+            (User.email.ilike(f"%{search_q}%")) |
+            (User.full_name.ilike(f"%{search_q}%")) |
+            (User.phone.like(f"%{search_q}%"))
+        )
+
+    users = query.order_by(User.created_at.desc()).all()
+    user_data = []
+    for u in users:
+        booking_count = Booking.query.filter_by(user_id=u.id).count()
+        user_data.append({
+            'user': u,
+            'booking_count': booking_count
+        })
+
+    return render_template(
+        'admin/users.html',
+        users=user_data,
+        role_filter=role_filter,
+        search_q=search_q,
+        total_users=len(user_data)
+    )
+
+@admin_bp.route('/booking/<int:booking_id>', methods=['GET', 'POST'])
+@admin_required
+def booking_detail(booking_id):
+    """Admin PNR Auditor & Cancellation Control: Detailed view and administrative passenger cancellation."""
+    booking = db.session.get(Booking, booking_id)
+    if not booking:
+        flash("Booking record not found.", "danger")
+        return redirect(url_for('admin.bookings_list'))
+
+    if request.method == 'POST':
+        action = request.form.get('action')
+        if action == 'cancel_passengers':
+            if booking.chart_prepared:
+                flash("Cannot cancel tickets after Reservation Chart has been finalized.", "warning")
+                return redirect(url_for('admin.booking_detail', booking_id=booking_id))
+
+            p_ids = request.form.getlist('passenger_ids')
+            p_ids = [int(pid) for pid in p_ids if pid.isdigit()]
+            if not p_ids:
+                flash("Please select at least one passenger to cancel.", "warning")
+                return redirect(url_for('admin.booking_detail', booking_id=booking_id))
+
+            success, msg, refund = cancel_passengers(booking_id, p_ids)
+            if success:
+                flash(f"Admin Action: {msg}", "success")
+            else:
+                flash(f"Cancellation Failed: {msg}", "danger")
+            return redirect(url_for('admin.booking_detail', booking_id=booking_id))
+
+    summary = get_ticket_summary(booking)
+    return render_template('admin/booking_detail.html', booking=booking, summary=summary)
+
+@admin_bp.route('/policies', methods=['GET', 'POST'])
+@admin_required
+def policies():
+    """Operations Policies & Daemons Console: Monitor 8-Hour Auto-Charting & 5-Day Transaction Retention."""
+    if request.method == 'POST':
+        action = request.form.get('action')
+        if action == 'run_retention_archive':
+            count = archive_or_purge_old_transactions(retention_days=5, purge=False)
+            flash(f"Retention Job Executed: Archived {count} booking transactions older than 5 days.", "info")
+        elif action == 'run_retention_purge':
+            count = delete_old_booking_history(days=5)
+            flash(f"Purge Job Executed: Permanently deleted {count} booking transactions older than 5 days.", "warning")
+        elif action == 'run_auto_chart':
+            res = check_and_auto_prepare_charts(hours_before=AUTO_CHART_HOURS_BEFORE)
+            flash(f"Auto-Charting Job Executed: Prepared {res['count']} reservation chart(s).", "success")
+        return redirect(url_for('admin.policies'))
+
+    cutoff_5_days = utcnow() - timedelta(days=5)
+    total_active_bookings = Booking.query.filter(Booking.booking_time >= cutoff_5_days, Booking.is_archived == False).count()
+    total_archived_bookings = Booking.query.filter((Booking.is_archived == True) | (Booking.booking_time < cutoff_5_days)).count()
+    total_charts_all_time = ChartLog.query.count()
+
+    return render_template(
+        'admin/policies.html',
+        total_active_bookings=total_active_bookings,
+        total_archived_bookings=total_archived_bookings,
+        total_charts_all_time=total_charts_all_time,
+        auto_chart_hours=AUTO_CHART_HOURS_BEFORE,
+        retention_days=5
     )

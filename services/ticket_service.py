@@ -92,6 +92,7 @@ def get_ticket_summary(booking):
         coach_bay = get_coach_bay_matrix(booking.travel_class, p.seat_no)
         
         passenger_list.append({
+            'id': p.id,
             'sno': idx,
             'name': p.name,
             'age': p.age,

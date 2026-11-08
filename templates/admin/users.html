@@ -1,0 +1,112 @@
+{% extends 'base.html' %}
+
+{% block title %}User Registry - IRCTC Operations Control{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+
+    <!-- Admin Section Header -->
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
+        <div>
+            <div class="d-flex align-items-center">
+                <span class="badge bg-warning text-dark me-2 fs-6"><i class="fa-solid fa-users-gear me-1"></i> Access Management</span>
+                <h3 class="fw-bold mb-0 text-dark">System User & Access Registry</h3>
+            </div>
+            <p class="text-muted small mb-0 mt-1">Audit registered passenger accounts, administrative privileges, and user transaction volumes.</p>
+        </div>
+        <div>
+            <a href="{{ url_for('admin.dashboard') }}" class="btn btn-outline-secondary btn-sm">
+                <i class="fa-solid fa-arrow-left me-1"></i> Dashboard
+            </a>
+        </div>
+    </div>
+
+    <!-- Filter Card -->
+    <div class="card shadow-sm border-0 rounded-3 mb-4 bg-white">
+        <div class="card-body p-3">
+            <form method="GET" action="{{ url_for('admin.users_list') }}" class="row g-2 align-items-center">
+                <div class="col-md-7">
+                    <div class="input-group">
+                        <span class="input-group-text bg-light"><i class="fa-solid fa-magnifying-glass text-muted"></i></span>
+                        <input type="text" name="q" class="form-control" placeholder="Search by username, full name, email, or mobile..." value="{{ search_q }}">
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <select name="role" class="form-select">
+                        <option value="">All Account Roles</option>
+                        <option value="admin" {% if role_filter == 'admin' %}selected{% endif %}>Administrators Only</option>
+                        <option value="user" {% if role_filter == 'user' %}selected{% endif %}>Standard Passengers Only</option>
+                    </select>
+                </div>
+                <div class="col-md-2 d-flex gap-2">
+                    <button type="submit" class="btn btn-primary btn-sm flex-grow-1">Filter</button>
+                    {% if search_q or role_filter %}
+                        <a href="{{ url_for('admin.users_list') }}" class="btn btn-outline-secondary btn-sm">Clear</a>
+                    {% endif %}
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Users Table -->
+    <div class="card shadow-sm border-0 rounded-3 bg-white">
+        <div class="card-header bg-light py-3 border-bottom d-flex justify-content-between align-items-center">
+            <h6 class="mb-0 fw-bold text-dark">
+                <i class="fa-solid fa-id-card-clip text-primary me-2"></i>Registered System Accounts
+            </h6>
+            <span class="badge bg-secondary">Total: {{ total_users }} Accounts</span>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover table-striped align-middle mb-0 small">
+                <thead class="table-dark">
+                    <tr>
+                        <th style="width: 70px;">#</th>
+                        <th>User Account</th>
+                        <th>Full Name</th>
+                        <th>Email Address</th>
+                        <th>Mobile Number</th>
+                        <th class="text-center" style="width: 130px;">Account Role</th>
+                        <th class="text-center" style="width: 120px;">Bookings Made</th>
+                        <th style="width: 150px;">Registered On</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if not users %}
+                        <tr>
+                            <td colspan="8" class="text-center py-4 text-muted">
+                                <i class="fa-solid fa-user-slash fa-2x mb-2 d-block"></i>
+                                No users found matching your search criteria.
+                            </td>
+                        </tr>
+                    {% else %}
+                        {% for item in users %}
+                            {% set u = item.user %}
+                            <tr>
+                                <td>{{ u.id }}</td>
+                                <td>
+                                    <strong class="text-dark">{{ u.username }}</strong>
+                                </td>
+                                <td>{{ u.full_name }}</td>
+                                <td class="text-muted">{{ u.email }}</td>
+                                <td>{{ u.phone or '--' }}</td>
+                                <td class="text-center">
+                                    {% if u.role == 'admin' %}
+                                        <span class="badge bg-danger px-2 py-1"><i class="fa-solid fa-shield-halved me-1"></i> ADMIN</span>
+                                    {% else %}
+                                        <span class="badge bg-primary px-2 py-1"><i class="fa-solid fa-user me-1"></i> PASSENGER</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-center">
+                                    <span class="badge bg-light text-dark border fw-bold">{{ item.booking_count }}</span>
+                                </td>
+                                <td class="text-muted">{{ u.created_at.strftime('%d-%b-%Y') if u.created_at else '--' }}</td>
+                            </tr>
+                        {% endfor %}
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

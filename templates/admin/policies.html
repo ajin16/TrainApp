@@ -1,0 +1,117 @@
+{% extends 'base.html' %}
+
+{% block title %}System Policies & Daemons Console - IRCTC Operations{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+
+    <!-- Section Header -->
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
+        <div>
+            <div class="d-flex align-items-center">
+                <span class="badge bg-warning text-dark me-2 fs-6"><i class="fa-solid fa-gears me-1"></i> Automation Engine</span>
+                <h3 class="fw-bold mb-0 text-dark">System Policies & Background Daemons</h3>
+            </div>
+            <p class="text-muted small mb-0 mt-1">Status of IRCTC 8-Hour Automatic Charting Daemon and 5-Day Transaction Retention Policy.</p>
+        </div>
+        <div>
+            <a href="{{ url_for('admin.dashboard') }}" class="btn btn-outline-secondary btn-sm">
+                <i class="fa-solid fa-arrow-left me-1"></i> Dashboard
+            </a>
+        </div>
+    </div>
+
+    <!-- Policy 1: 8-Hour Auto-Charting Daemon -->
+    <div class="card shadow-sm border-0 rounded-3 mb-4 bg-white">
+        <div class="card-header bg-irctc-gradient text-white py-3 d-flex justify-content-between align-items-center">
+            <h5 class="mb-0 fw-bold">
+                <i class="fa-solid fa-clock-rotate-left me-2 text-warning"></i>1. Automated 8-Hour Reservation Charting Policy
+            </h5>
+            <span class="badge bg-success"><i class="fa-solid fa-circle-dot me-1"></i> Daemon Active (60s loop)</span>
+        </div>
+        <div class="card-body p-4">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <p class="text-muted mb-2">
+                        In accordance with Indian Railway operational rules, reservation charts for all scheduled trains are automatically prepared 
+                        <strong>{{ auto_chart_hours }} hours before departure from the origin station</strong>.
+                    </p>
+                    <ul class="small text-secondary mb-3">
+                        <li>Evaluates RAC passenger waitlists and upgrades available berths into Confirmed (CNF) status.</li>
+                        <li>Finalizes shared side-lower berth numbers for remaining RAC passengers.</li>
+                        <li>Automatically cancels unconfirmed e-ticket waitlisted (WL) passengers with full refund minus nominal clerkage (₹60).</li>
+                        <li>Locks booking records against further passenger cancellations.</li>
+                    </ul>
+                    <div class="d-flex gap-3 small text-muted">
+                        <div>Total Charts Finalized All-Time: <strong class="text-dark">{{ total_charts_all_time }}</strong></div>
+                        <div>Daemon Poll Interval: <strong class="text-dark">Every 60 Seconds</strong></div>
+                    </div>
+                </div>
+                <div class="col-md-4 text-md-end mt-3 mt-md-0">
+                    <form method="POST" action="{{ url_for('admin.policies') }}">
+                        <input type="hidden" name="action" value="run_auto_chart">
+                        <button type="submit" class="btn btn-warning fw-bold px-4 py-2 shadow-xs">
+                            <i class="fa-solid fa-bolt me-1"></i> Execute Auto-Chart Check Now
+                        </button>
+                    </form>
+                    <a href="{{ url_for('admin.chart_prepare') }}" class="btn btn-link btn-sm d-block text-center mt-2 text-decoration-none">
+                        View Upcoming Chart Schedules &rarr;
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Policy 2: 5-Day Transaction Retention Policy -->
+    <div class="card shadow-sm border-0 rounded-3 mb-4 bg-white">
+        <div class="card-header bg-light py-3 border-bottom d-flex justify-content-between align-items-center">
+            <h5 class="mb-0 fw-bold text-dark">
+                <i class="fa-solid fa-box-archive me-2 text-primary"></i>2. IRCTC 5-Day Transaction Retention Policy
+            </h5>
+            <span class="badge bg-primary">High-Throughput Policy</span>
+        </div>
+        <div class="card-body p-4">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <p class="text-muted mb-2">
+                        To maintain peak throughput and low database latency during high-demand tatkal windows, customer transaction records 
+                        are retained in active query storage for <strong>{{ retention_days }} days</strong>.
+                    </p>
+                    <div class="row g-3 my-2">
+                        <div class="col-md-6">
+                            <div class="p-3 border rounded-3 bg-light">
+                                <small class="text-muted d-block text-uppercase">Active Window (Last 5 Days)</small>
+                                <span class="fs-4 fw-bold text-success">{{ total_active_bookings }}</span>
+                                <small class="text-muted d-block">Transactions currently in active user portal</small>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="p-3 border rounded-3 bg-light">
+                                <small class="text-muted d-block text-uppercase">Archived Window (&gt; 5 Days)</small>
+                                <span class="fs-4 fw-bold text-warning">{{ total_archived_bookings }}</span>
+                                <small class="text-muted d-block">Archived transaction records</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4 text-md-end mt-3 mt-md-0">
+                    <form method="POST" action="{{ url_for('admin.policies') }}" class="mb-2">
+                        <input type="hidden" name="action" value="run_retention_archive">
+                        <button type="submit" class="btn btn-outline-primary btn-sm w-100 py-2">
+                            <i class="fa-solid fa-box-archive me-1"></i> Run Archiving Job (&gt;5 Days)
+                        </button>
+                    </form>
+                    <form method="POST" action="{{ url_for('admin.policies') }}">
+                        <input type="hidden" name="action" value="run_retention_purge">
+                        <button type="submit" class="btn btn-outline-danger btn-sm w-100 py-2" 
+                                onclick="return confirm('Warning: Permanently delete database records older than 5 days?');">
+                            <i class="fa-solid fa-trash-can me-1"></i> Permanently Purge History (&gt;5 Days)
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

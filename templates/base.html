@@ -35,18 +35,33 @@
     <!-- Header Navbar -->
     <nav class="navbar navbar-expand-lg sticky-top navbar-irctc shadow-sm py-2">
         <div class="container">
-            <a class="navbar-brand d-flex align-items-center" href="{{ url_for('user.index') }}">
-                <span class="irctc-logo-badge me-2 shadow-sm">
-                    <i class="fa-solid fa-train-subway text-primary"></i>
-                </span>
-                <div class="lh-1">
-                    <div class="d-flex align-items-center">
-                        <span class="fw-bold fs-4 text-white tracking-wide">IRCTC</span>
-                        <span class="badge bg-warning text-dark ms-2 fw-semibold" style="font-size: 0.65rem;">eTicketing</span>
+            {% if session.get('role') == 'admin' %}
+                <a class="navbar-brand d-flex align-items-center" href="{{ url_for('admin.dashboard') }}">
+                    <span class="irctc-logo-badge me-2 shadow-sm bg-warning">
+                        <i class="fa-solid fa-shield-halved text-dark"></i>
+                    </span>
+                    <div class="lh-1">
+                        <div class="d-flex align-items-center">
+                            <span class="fw-bold fs-4 text-white tracking-wide">IRCTC</span>
+                            <span class="badge bg-warning text-dark ms-2 fw-bold" style="font-size: 0.65rem;">OPERATIONS CONTROL</span>
+                        </div>
+                        <small class="d-block text-white-50" style="font-size: 0.72rem;">Admin Management & Network Portal</small>
                     </div>
-                    <small class="d-block text-white-50" style="font-size: 0.72rem;">Indian Railway Catering and Tourism Corporation</small>
-                </div>
-            </a>
+                </a>
+            {% else %}
+                <a class="navbar-brand d-flex align-items-center" href="{{ url_for('user.index') }}">
+                    <span class="irctc-logo-badge me-2 shadow-sm">
+                        <i class="fa-solid fa-train-subway text-primary"></i>
+                    </span>
+                    <div class="lh-1">
+                        <div class="d-flex align-items-center">
+                            <span class="fw-bold fs-4 text-white tracking-wide">IRCTC</span>
+                            <span class="badge bg-warning text-dark ms-2 fw-semibold" style="font-size: 0.65rem;">eTicketing</span>
+                        </div>
+                        <small class="d-block text-white-50" style="font-size: 0.72rem;">Indian Railway Catering and Tourism Corporation</small>
+                    </div>
+                </a>
+            {% endif %}
             
             <button class="navbar-toggler text-white border-light" type="button" data-bs-toggle="collapse" data-bs-target="#navMenu">
                 <span class="navbar-toggler-icon text-white"></span>
@@ -54,59 +69,101 @@
 
             <div class="collapse navbar-collapse" id="navMenu">
                 <ul class="navbar-nav ms-auto mb-2 mb-lg-0 align-items-center">
-                    <li class="nav-item">
-                        <a class="nav-link active text-white px-3" href="{{ url_for('user.index') }}">
-                            <i class="fa-solid fa-ticket me-1 text-warning"></i> Book Ticket
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link text-white px-3" href="{{ url_for('user.pnr_status') }}">
-                            <i class="fa-solid fa-magnifying-glass me-1 text-warning"></i> PNR Status
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link text-white px-3" href="{{ url_for('user.train_schedule') }}">
-                            <i class="fa-solid fa-clock me-1 text-warning"></i> Train Schedule
-                        </a>
-                    </li>
-
-                    {% if session.get('user_id') %}
+                    {% if session.get('role') == 'admin' %}
+                        <!-- Dedicated Admin Management Navigation (Only Admin Panel, No Booking/User Options) -->
                         <li class="nav-item">
-                            <a class="nav-link text-white px-3" href="{{ url_for('user.my_bookings') }}">
-                                <i class="fa-solid fa-folder-open me-1 text-warning"></i> My Bookings
+                            <a class="nav-link text-white px-2 py-1 {{ 'active fw-bold text-warning' if request.endpoint == 'admin.dashboard' else '' }}" href="{{ url_for('admin.dashboard') }}">
+                                <i class="fa-solid fa-gauge-high me-1 text-warning"></i> Dashboard
                             </a>
                         </li>
-                        {% if session.get('role') == 'admin' %}
-                            <li class="nav-item">
-                                <a class="nav-link text-warning fw-bold px-3" href="{{ url_for('admin.dashboard') }}">
-                                    <i class="fa-solid fa-user-shield me-1"></i> Admin Panel
-                                </a>
-                            </li>
-                        {% endif %}
+                        <li class="nav-item">
+                            <a class="nav-link text-white px-2 py-1 {{ 'active fw-bold text-warning' if request.endpoint in ['admin.trains', 'admin.train_detail'] else '' }}" href="{{ url_for('admin.trains') }}">
+                                <i class="fa-solid fa-train me-1 text-warning"></i> Trains & Fleet
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link text-white px-2 py-1 {{ 'active fw-bold text-warning' if request.endpoint == 'admin.stations' else '' }}" href="{{ url_for('admin.stations') }}">
+                                <i class="fa-solid fa-building-columns me-1 text-warning"></i> Station Master
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link text-white px-2 py-1 {{ 'active fw-bold text-warning' if request.endpoint in ['admin.chart_prepare', 'admin.chart_view'] else '' }}" href="{{ url_for('admin.chart_prepare') }}">
+                                <i class="fa-solid fa-clipboard-check me-1 text-warning"></i> Charting Center
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link text-white px-2 py-1 {{ 'active fw-bold text-warning' if request.endpoint in ['admin.bookings_list', 'admin.booking_detail'] else '' }}" href="{{ url_for('admin.bookings_list') }}">
+                                <i class="fa-solid fa-receipt me-1 text-warning"></i> Central Bookings
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link text-white px-2 py-1 {{ 'active fw-bold text-warning' if request.endpoint == 'admin.users_list' else '' }}" href="{{ url_for('admin.users_list') }}">
+                                <i class="fa-solid fa-users-gear me-1 text-warning"></i> User Registry
+                            </a>
+                        </li>
                         <li class="nav-item ms-lg-2">
                             <div class="dropdown">
-                                <button class="btn btn-outline-light btn-sm dropdown-toggle rounded-pill px-3" type="button" data-bs-toggle="dropdown">
-                                    <i class="fa-solid fa-user-circle me-1 text-warning"></i> {{ session.get('username') }}
+                                <button class="btn btn-warning btn-sm dropdown-toggle rounded-pill px-3 fw-bold text-dark shadow-xs" type="button" data-bs-toggle="dropdown">
+                                    <i class="fa-solid fa-shield-halved me-1"></i> Admin: {{ session.get('username') }}
                                 </button>
                                 <ul class="dropdown-menu dropdown-menu-end shadow">
-                                    <li><span class="dropdown-item-text text-muted small"><i class="fa-solid fa-id-badge me-1"></i> Role: <strong>{{ session.get('role') | upper }}</strong></span></li>
-                                    <li><a class="dropdown-item" href="{{ url_for('user.my_bookings') }}"><i class="fa-solid fa-ticket me-2 text-primary"></i> Booking History (5 Days)</a></li>
+                                    <li><span class="dropdown-item-text text-muted small"><i class="fa-solid fa-id-badge me-1"></i> Role: <strong>OPERATIONS ADMIN</strong></span></li>
+                                    <li><a class="dropdown-item" href="{{ url_for('admin.dashboard') }}"><i class="fa-solid fa-gauge-high me-2 text-primary"></i> Operations Dashboard</a></li>
+                                    <li><a class="dropdown-item" href="{{ url_for('admin.policies') }}"><i class="fa-solid fa-clock-rotate-left me-2 text-warning"></i> Policies & Daemons</a></li>
                                     <li><hr class="dropdown-divider"></li>
                                     <li><a class="dropdown-item text-danger" href="{{ url_for('auth.logout') }}"><i class="fa-solid fa-right-from-bracket me-2"></i> Logout</a></li>
                                 </ul>
                             </div>
                         </li>
                     {% else %}
-                        <li class="nav-item ms-lg-2">
-                            <a class="btn btn-outline-light btn-sm rounded-pill px-3 me-2" href="{{ url_for('auth.login') }}">
-                                <i class="fa-solid fa-right-to-bracket me-1"></i> Login
+                        <!-- Regular Passenger Navigation -->
+                        <li class="nav-item">
+                            <a class="nav-link active text-white px-3" href="{{ url_for('user.index') }}">
+                                <i class="fa-solid fa-ticket me-1 text-warning"></i> Book Ticket
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a class="btn btn-irctc-orange btn-sm rounded-pill px-3 fw-semibold" href="{{ url_for('auth.register') }}">
-                                Register
+                            <a class="nav-link text-white px-3" href="{{ url_for('user.pnr_status') }}">
+                                <i class="fa-solid fa-magnifying-glass me-1 text-warning"></i> PNR Status
                             </a>
                         </li>
+                        <li class="nav-item">
+                            <a class="nav-link text-white px-3" href="{{ url_for('user.train_schedule') }}">
+                                <i class="fa-solid fa-clock me-1 text-warning"></i> Train Schedule
+                            </a>
+                        </li>
+
+                        {% if session.get('user_id') %}
+                            <li class="nav-item">
+                                <a class="nav-link text-white px-3" href="{{ url_for('user.my_bookings') }}">
+                                    <i class="fa-solid fa-folder-open me-1 text-warning"></i> My Bookings
+                                </a>
+                            </li>
+                            <li class="nav-item ms-lg-2">
+                                <div class="dropdown">
+                                    <button class="btn btn-outline-light btn-sm dropdown-toggle rounded-pill px-3" type="button" data-bs-toggle="dropdown">
+                                        <i class="fa-solid fa-user-circle me-1 text-warning"></i> {{ session.get('username') }}
+                                    </button>
+                                    <ul class="dropdown-menu dropdown-menu-end shadow">
+                                        <li><span class="dropdown-item-text text-muted small"><i class="fa-solid fa-id-badge me-1"></i> Role: <strong>{{ session.get('role') | upper }}</strong></span></li>
+                                        <li><a class="dropdown-item" href="{{ url_for('user.my_bookings') }}"><i class="fa-solid fa-ticket me-2 text-primary"></i> Booking History (5 Days)</a></li>
+                                        <li><hr class="dropdown-divider"></li>
+                                        <li><a class="dropdown-item text-danger" href="{{ url_for('auth.logout') }}"><i class="fa-solid fa-right-from-bracket me-2"></i> Logout</a></li>
+                                    </ul>
+                                </div>
+                            </li>
+                        {% else %}
+                            <li class="nav-item ms-lg-2">
+                                <a class="btn btn-outline-light btn-sm rounded-pill px-3 me-2" href="{{ url_for('auth.login') }}">
+                                    <i class="fa-solid fa-right-to-bracket me-1"></i> Login
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="btn btn-irctc-orange btn-sm rounded-pill px-3 fw-semibold" href="{{ url_for('auth.register') }}">
+                                    Register
+                                </a>
+                            </li>
+                        {% endif %}
                     {% endif %}
                 </ul>
             </div>

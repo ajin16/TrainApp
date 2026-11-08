@@ -97,6 +97,9 @@ def search():
 @user_bp.route('/book/<int:train_id>', methods=['GET', 'POST'])
 @login_required
 def book_form(train_id):
+    if session.get('role') == 'admin':
+        flash("Administrator accounts cannot book passenger tickets. Please manage train services in the Admin Operations Portal.", "warning")
+        return redirect(url_for('admin.dashboard'))
     from_code = request.args.get('from', '')
     to_code = request.args.get('to', '')
     j_date_str = request.args.get('date', '')
@@ -201,6 +204,8 @@ def book_form(train_id):
 @user_bp.route('/payment', methods=['GET', 'POST'])
 @login_required
 def payment_mock():
+    if session.get('role') == 'admin':
+        return redirect(url_for('admin.dashboard'))
     pending = session.get('pending_booking')
     if not pending:
         flash("No active booking session found.", "warning")
@@ -254,6 +259,8 @@ def pnr_status():
 @user_bp.route('/my-bookings')
 @login_required
 def my_bookings():
+    if session.get('role') == 'admin':
+        return redirect(url_for('admin.bookings_list'))
     # 5-Day Transaction Retention Policy:
     # 1. Run automatic background archiving for any records older than 5 days
     archive_or_purge_old_transactions(retention_days=5, purge=False)

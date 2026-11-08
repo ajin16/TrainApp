@@ -84,7 +84,7 @@
                 
                 <div class="col-12">
                     <div class="train-card shadow-sm rounded-3">
-                        <div class="card-header bg-light border-bottom d-flex justify-content-between align-items-center py-3">
+                        <div class="card-header bg-light border-bottom d-flex flex-wrap justify-content-between align-items-center py-3 gap-2">
                             <div>
                                 <a href="{{ url_for('user.train_schedule', train_number=train.train_number) }}" class="text-decoration-none" title="View Full Train Schedule & Stops">
                                     <span class="badge bg-dark text-warning fs-6 me-2">{{ train.train_number }}</span>
@@ -92,30 +92,106 @@
                                     <i class="fa-solid fa-circle-info text-primary ms-1" style="font-size: 0.85rem;"></i>
                                 </a>
                                 <span class="badge bg-secondary ms-2 small">Runs On: {{ train.operating_days }}</span>
+                                {% if item.is_intermediate %}
+                                    <span class="badge bg-primary-subtle text-primary border border-primary ms-2 small">
+                                        <i class="fa-solid fa-arrows-split-up-and-left me-1"></i> Intermediate Station Route
+                                    </span>
+                                {% endif %}
                             </div>
-                            <div class="text-muted small">
-                                <i class="fa-solid fa-road me-1 text-primary"></i> Distance: <strong>{{ item.distance_km }} km</strong>
+                            <div class="d-flex align-items-center gap-3 text-muted small">
+                                <div><i class="fa-solid fa-hourglass-half me-1 text-primary"></i> Duration: <strong>{{ item.duration_str }}</strong></div>
+                                <div><i class="fa-solid fa-road me-1 text-primary"></i> Distance: <strong>{{ item.distance_km }} km</strong></div>
                             </div>
                         </div>
 
                         <div class="card-body p-4">
+                            <!-- Overall Train Route Info (especially for intermediate searches) -->
+                            {% if item.is_intermediate %}
+                                <div class="bg-light-subtle border rounded-2 px-3 py-2 mb-3 small d-flex flex-wrap justify-content-between align-items-center">
+                                    <div>
+                                        <span class="text-muted"><i class="fa-solid fa-train me-1 text-secondary"></i> Full Train Journey:</span>
+                                        <strong>{{ item.origin_station.name }} ({{ item.origin_station.code }})</strong>
+                                        <i class="fa-solid fa-arrow-right-long mx-1 text-muted"></i>
+                                        <strong>{{ item.final_destination.name }} ({{ item.final_destination.code }})</strong>
+                                    </div>
+                                    <div class="text-secondary">
+                                        Boarding Stop: <strong>#{{ src_r.stop_number }}</strong> | De-boarding Stop: <strong>#{{ dst_r.stop_number }}</strong>
+                                        ({{ item.intermediate_halts }} intermediate {% if item.intermediate_halts == 1 %}halt{% else %}halts{% endif %})
+                                    </div>
+                                </div>
+                            {% endif %}
+
                             <!-- Timing Row -->
                             <div class="row align-items-center text-center mb-4 py-2 bg-light rounded-3">
                                 <div class="col-md-4 text-md-start ps-md-4">
                                     <h3 class="fw-bold mb-0 text-primary">{{ src_r.departure_time }}</h3>
                                     <div class="fw-semibold text-dark">{{ from_st.name }} ({{ from_st.code }})</div>
-                                    <small class="text-muted">Day {{ src_r.day_number }}</small>
+                                    <small class="text-muted">Day {{ src_r.day_number }} {% if item.is_intermediate_boarding %}&bull; <span class="text-primary fw-semibold">Boarding Station</span>{% endif %}</small>
                                 </div>
 
                                 <div class="col-md-4 py-2">
-                                    <div class="text-muted small border-bottom pb-1 mb-1">Direct Train Route</div>
+                                    <div class="text-muted small border-bottom pb-1 mb-1">
+                                        {{ item.duration_str }} &bull; {{ item.intermediate_halts }} intermediate {% if item.intermediate_halts == 1 %}halt{% else %}halts{% endif %}
+                                    </div>
                                     <i class="fa-solid fa-arrow-right-long fa-xl text-warning"></i>
+                                    <div>
+                                        <button class="btn btn-link btn-sm text-decoration-none p-0 text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#halts-{{ train.id }}">
+                                            <i class="fa-solid fa-list-ol me-1 text-primary"></i> View Route & Halts <i class="fa-solid fa-chevron-down fa-xs"></i>
+                                        </button>
+                                    </div>
                                 </div>
 
                                 <div class="col-md-4 text-md-end pe-md-4">
                                     <h3 class="fw-bold mb-0 text-primary">{{ dst_r.arrival_time }}</h3>
                                     <div class="fw-semibold text-dark">{{ to_st.name }} ({{ to_st.code }})</div>
-                                    <small class="text-muted">Day {{ dst_r.day_number }}</small>
+                                    <small class="text-muted">Day {{ dst_r.day_number }} {% if item.is_intermediate_deboarding %}&bull; <span class="text-primary fw-semibold">Destination Station</span>{% endif %}</small>
+                                </div>
+                            </div>
+
+                            <!-- Collapsible Full Route & Halts Table -->
+                            <div class="collapse mb-4" id="halts-{{ train.id }}">
+                                <div class="card card-body bg-white border p-3">
+                                    <h6 class="fw-bold text-dark border-bottom pb-2 mb-2">
+                                        <i class="fa-solid fa-route me-1 text-primary"></i> Full Route & Halts for {{ train.train_number }} - {{ train.name }}
+                                    </h6>
+                                    <div class="table-responsive">
+                                        <table class="table table-sm table-bordered text-center small align-middle mb-0">
+                                            <thead class="table-light">
+                                                <tr>
+                                                    <th>#</th>
+                                                    <th>Station</th>
+                                                    <th>Arrival</th>
+                                                    <th>Departure</th>
+                                                    <th>Distance</th>
+                                                    <th>Day</th>
+                                                    <th>Status</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {% for stop in item.all_stops %}
+                                                    <tr class="{% if stop.station_id == from_st.id %}table-warning fw-bold{% elif stop.station_id == to_st.id %}table-success fw-bold{% elif stop.stop_number > src_r.stop_number and stop.stop_number < dst_r.stop_number %}table-light{% endif %}">
+                                                        <td>{{ stop.stop_number }}</td>
+                                                        <td class="text-start">{{ stop.station.name }} ({{ stop.station.code }})</td>
+                                                        <td>{{ stop.arrival_time }}</td>
+                                                        <td>{{ stop.departure_time }}</td>
+                                                        <td>{{ stop.distance_km }} km</td>
+                                                        <td>Day {{ stop.day_number }}</td>
+                                                        <td>
+                                                            {% if stop.station_id == from_st.id %}
+                                                                <span class="badge bg-warning text-dark">Your Boarding Station</span>
+                                                            {% elif stop.station_id == to_st.id %}
+                                                                <span class="badge bg-success">Your Destination Station</span>
+                                                            {% elif stop.stop_number > src_r.stop_number and stop.stop_number < dst_r.stop_number %}
+                                                                <span class="badge bg-secondary-subtle text-dark">Intermediate Halt</span>
+                                                            {% else %}
+                                                                <span class="text-muted">--</span>
+                                                            {% endif %}
+                                                        </td>
+                                                    </tr>
+                                                {% endfor %}
+                                            </tbody>
+                                        </table>
+                                    </div>
                                 </div>
                             </div>
 

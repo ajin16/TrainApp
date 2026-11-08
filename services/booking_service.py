@@ -268,38 +268,125 @@ def get_class_availability(train_id, journey_date, travel_class, quota='GN'):
             'general_quota_seats': general_cnf_seats
         }
 
+def resolve_station(query_str):
+    """
+    Intelligently resolve a Station object from code, full name, city, or formatted 'Name (CODE)' string.
+    Supports case-insensitive matching and partial searches.
+    """
+    if not query_str:
+        return None
+    query_str = str(query_str).strip()
+    if not query_str:
+        return None
+
+    import re
+    # 1. Match code inside parentheses e.g. "Salem (SA)" or "New Delhi (NDLS)"
+    match = re.search(r'\(([A-Za-z0-9]+)\)', query_str)
+    if match:
+        st = Station.query.filter_by(code=match.group(1).upper()).first()
+        if st:
+            return st
+
+    # 2. Direct code match (e.g. "NDLS", "MAS", "SA")
+    st = Station.query.filter_by(code=query_str.upper()).first()
+    if st:
+        return st
+
+    # 3. Exact name match (case-insensitive)
+    st = Station.query.filter(Station.name.ilike(query_str)).first()
+    if st:
+        return st
+
+    # 4. Prefix or substring name/city match
+    st = Station.query.filter(
+        (Station.name.ilike(f"{query_str}%")) |
+        (Station.city.ilike(f"{query_str}%")) |
+        (Station.name.ilike(f"%{query_str}%"))
+    ).first()
+    return st
+
 def search_trains(from_station_code, to_station_code, journey_date, quota='GN'):
     """
     Find trains running between source and destination stations on given date.
-    Returns list of dicts with train info, route details, and class availability.
-    Eager loads routes and configs to eliminate N+1 queries.
+    Fully supports intermediate-to-intermediate, origin-to-intermediate, and intermediate-to-destination searches.
+    Validates train operating days against journey date.
+    Calculates segment distance, intermediate halts count, journey duration, and class availability.
     """
-    from_st = Station.query.filter_by(code=from_station_code.upper()).first()
-    to_st = Station.query.filter_by(code=to_station_code.upper()).first()
+    from_st = resolve_station(from_station_code)
+    to_st = resolve_station(to_station_code)
     
     if not from_st or not to_st or from_st.id == to_st.id:
         return [], from_st, to_st
 
     results = []
-    # Eager load routes and configs for high throughput
+    # Eager load routes, stations, and configs for high throughput
     trains = Train.query.filter_by(is_active=True).options(
-        db.joinedload(Train.routes),
-        db.joinedload(Train.configs)
+        db.joinedload(Train.routes).joinedload(RouteStation.station),
+        db.joinedload(Train.configs),
+        db.joinedload(Train.source_station),
+        db.joinedload(Train.destination_station)
     ).all()
     
+    day_name_short = journey_date.strftime('%a')  # 'Mon', 'Tue', etc.
+    day_name_long = journey_date.strftime('%A')   # 'Monday', 'Tuesday', etc.
+    
     for train in trains:
+        # Validate train operating days for journey date
+        op_days = train.operating_days or 'Daily'
+        operates = (
+            'Daily' in op_days or
+            day_name_short in op_days or
+            day_name_long in op_days
+        )
+        if not operates:
+            continue
+
         src_route = None
         dst_route = None
         
-        for r in train.routes:
+        # Sort train routes by stop_number to guarantee exact sequence order
+        sorted_routes = sorted(train.routes, key=lambda r: r.stop_number)
+        
+        for r in sorted_routes:
             if r.station_id == from_st.id:
                 src_route = r
             elif r.station_id == to_st.id:
                 dst_route = r
                 
-        # Must pass from_st BEFORE to_st
+        # Train must pass from_st BEFORE to_st
         if src_route and dst_route and src_route.stop_number < dst_route.stop_number:
             distance = max(1.0, round(dst_route.distance_km - src_route.distance_km, 1))
+            
+            # Intermediate halts calculation
+            intermediate_halts = max(0, dst_route.stop_number - src_route.stop_number - 1)
+            
+            # Journey duration calculation between selected stations
+            duration_str = "--"
+            if src_route.departure_time != '--:--' and dst_route.arrival_time != '--:--':
+                try:
+                    dep_parts = [int(x) for x in src_route.departure_time.split(':')]
+                    arr_parts = [int(x) for x in dst_route.arrival_time.split(':')]
+                    dep_mins = (src_route.day_number - 1) * 1440 + dep_parts[0] * 60 + dep_parts[1]
+                    arr_mins = (dst_route.day_number - 1) * 1440 + arr_parts[0] * 60 + arr_parts[1]
+                    diff_mins = arr_mins - dep_mins
+                    if diff_mins < 0:
+                        diff_mins += 1440
+                    h = diff_mins // 60
+                    m = diff_mins % 60
+                    duration_str = f"{h}h {m:02d}m"
+                except Exception:
+                    duration_str = "--"
+            
+            # Determine if this is an intermediate station search
+            is_intermediate_boarding = (src_route.stop_number > 1)
+            is_intermediate_deboarding = (dst_route.stop_number < len(sorted_routes))
+            is_intermediate = is_intermediate_boarding or is_intermediate_deboarding
+            
+            # Extract names of intermediate halt stations for route preview
+            halt_stations = [
+                r.station.name for r in sorted_routes 
+                if src_route.stop_number < r.stop_number < dst_route.stop_number
+            ]
             
             # Class availability details
             availabilities = {}
@@ -316,9 +403,20 @@ def search_trains(from_station_code, to_station_code, journey_date, quota='GN'):
                 'src_route': src_route,
                 'dst_route': dst_route,
                 'distance_km': distance,
+                'intermediate_halts': intermediate_halts,
+                'halt_stations': halt_stations,
+                'duration_str': duration_str,
+                'is_intermediate': is_intermediate,
+                'is_intermediate_boarding': is_intermediate_boarding,
+                'is_intermediate_deboarding': is_intermediate_deboarding,
+                'origin_station': train.source_station,
+                'final_destination': train.destination_station,
+                'all_stops': sorted_routes,
                 'classes': availabilities
             })
             
+    # Sort results by scheduled departure time ascending
+    results.sort(key=lambda item: item['src_route'].departure_time if item['src_route'].departure_time != '--:--' else '99:99')
     return results, from_st, to_st
 
 def assign_berth_type(travel_class, seat_no):
