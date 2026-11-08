@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session, jsonify
 from datetime import datetime, date, timedelta, time
-from models import db, Station, Train, Booking, Passenger
+from models import db, Station, Train, Booking, Passenger, utcnow
 from services.booking_service import (
     search_trains,
     get_class_availability,
@@ -206,9 +206,9 @@ def payment_mock():
         flash("No active booking session found.", "warning")
         return redirect(url_for('user.index'))
 
-    train = Train.query.get(pending['train_id'])
-    from_st = Station.query.get(pending['from_station_id'])
-    to_st = Station.query.get(pending['to_station_id'])
+    train = db.session.get(Train, pending['train_id'])
+    from_st = db.session.get(Station, pending['from_station_id'])
+    to_st = db.session.get(Station, pending['to_station_id'])
 
     if request.method == 'POST':
         # Process booking with full validations (ARP and Tatkal)
@@ -259,7 +259,7 @@ def my_bookings():
     archive_or_purge_old_transactions(retention_days=5, purge=False)
 
     filter_type = request.args.get('filter', 'recent').strip().lower()
-    cutoff_5_days = datetime.utcnow() - timedelta(days=5)
+    cutoff_5_days = utcnow() - timedelta(days=5)
 
     base_query = Booking.query.filter_by(user_id=session['user_id'])
     
@@ -275,15 +275,23 @@ def my_bookings():
 
     total_count = base_query.count()
 
+    # Eager load relationships to prevent N+1 queries during summary generation
+    load_options = (
+        db.joinedload(Booking.train).joinedload(Train.routes),
+        db.joinedload(Booking.from_station),
+        db.joinedload(Booking.to_station),
+        db.selectinload(Booking.passengers)
+    )
+
     if filter_type == 'archived':
-        bookings = base_query.filter(
+        bookings = base_query.options(*load_options).filter(
             (Booking.is_archived == True) | (Booking.booking_time < cutoff_5_days)
         ).order_by(Booking.booking_time.desc()).all()
     elif filter_type == 'all':
-        bookings = base_query.order_by(Booking.booking_time.desc()).all()
+        bookings = base_query.options(*load_options).order_by(Booking.booking_time.desc()).all()
     else:  # 'recent' default (<= 5 days)
         filter_type = 'recent'
-        bookings = base_query.filter(
+        bookings = base_query.options(*load_options).filter(
             Booking.is_archived == False,
             Booking.booking_time >= cutoff_5_days
         ).order_by(Booking.booking_time.desc()).all()
@@ -302,7 +310,13 @@ def my_bookings():
 @user_bp.route('/ticket/<int:booking_id>')
 @login_required
 def ticket_detail(booking_id):
-    booking = Booking.query.get_or_404(booking_id)
+    booking = Booking.query.options(
+        db.joinedload(Booking.train).joinedload(Train.routes),
+        db.joinedload(Booking.from_station),
+        db.joinedload(Booking.to_station),
+        db.selectinload(Booking.passengers)
+    ).filter_by(id=booking_id).first_or_404()
+
     if booking.user_id != session['user_id'] and session.get('role') != 'admin':
         flash("Unauthorized access to ticket.", "danger")
         return redirect(url_for('user.my_bookings'))
@@ -326,7 +340,7 @@ def cancel_ticket_form(booking_id):
         flash("Cannot cancel tickets after chart preparation.", "warning")
         return redirect(url_for('user.ticket_detail', booking_id=booking_id))
 
-    fare_per_passenger = booking.total_fare / len(booking.passengers)
+    fare_per_passenger = booking.total_fare / max(1, len(booking.passengers))
     active_passengers = [p for p in booking.passengers if not p.is_cancelled]
 
     if request.method == 'POST':

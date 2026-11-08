@@ -1,7 +1,7 @@
 import unittest
 from datetime import date, timedelta
 from app import create_app
-from models import db, User, Station, Train, Booking, Passenger, CoachQuotaConfig
+from models import db, User, Station, Train, Booking, Passenger, CoachQuotaConfig, utcnow
 from services.booking_service import search_trains, get_class_availability, calculate_fare, book_ticket
 from services.cancellation_service import cancel_passengers, promote_rac_and_wl
 from services.chart_service import prepare_reservation_chart
@@ -24,6 +24,7 @@ class TestIRCTCEngine(unittest.TestCase):
     def tearDown(self):
         db.session.remove()
         db.drop_all()
+        db.engine.dispose()
         self.app_context.pop()
 
     def _seed_test_data(self):
@@ -223,7 +224,7 @@ class TestIRCTCEngine(unittest.TestCase):
             from_station_id=self.s1_id, to_station_id=self.s3_id,
             journey_date=date.today() + timedelta(days=3), travel_class='3A', quota='GN',
             total_fare=1500.0, status='BOOKED',
-            booking_time=datetime.utcnow() - timedelta(days=2),
+            booking_time=utcnow() - timedelta(days=2),
             is_archived=False
         )
 
@@ -233,7 +234,7 @@ class TestIRCTCEngine(unittest.TestCase):
             from_station_id=self.s1_id, to_station_id=self.s3_id,
             journey_date=date.today() + timedelta(days=3), travel_class='3A', quota='GN',
             total_fare=1500.0, status='BOOKED',
-            booking_time=datetime.utcnow() - timedelta(days=7),
+            booking_time=utcnow() - timedelta(days=7),
             is_archived=False
         )
 
@@ -364,7 +365,7 @@ class TestIRCTCEngine(unittest.TestCase):
             travel_class='3A',
             quota='GN',
             pnr='1112223334',
-            booking_time=datetime.utcnow() - timedelta(days=6),
+            booking_time=utcnow() - timedelta(days=6),
             total_fare=500.0,
             status='CONFIRMED'
         )
@@ -377,7 +378,7 @@ class TestIRCTCEngine(unittest.TestCase):
             travel_class='3A',
             quota='GN',
             pnr='1112223335',
-            booking_time=datetime.utcnow() - timedelta(days=2),
+            booking_time=utcnow() - timedelta(days=2),
             total_fare=500.0,
             status='CONFIRMED'
         )
@@ -391,18 +392,35 @@ class TestIRCTCEngine(unittest.TestCase):
 
     def test_5_minute_inactivity_timeout_policy(self):
         """Requirement 8: Verify auto log off after 5 minutes of inactivity."""
-        from datetime import datetime
+        import time
         with self.client.session_transaction() as sess:
             sess['user_id'] = self.user_id
             sess['username'] = 'testuser'
             sess['role'] = 'user'
             # Simulated inactivity: last activity was 305 seconds ago (> 300 seconds)
-            sess['last_activity'] = datetime.utcnow().timestamp() - 305
+            sess['last_activity'] = time.time() - 305
 
         resp = self.client.get('/my-bookings', follow_redirects=False)
         # Should redirect to login with reason=timeout
         self.assertEqual(resp.status_code, 302)
         self.assertIn('/login?reason=timeout', resp.location)
+
+    def test_seat_collision_prevention(self):
+        """Verify that berth preference matching never assigns duplicate seat numbers."""
+        journey_date = date.today() + timedelta(days=2)
+        # Book 3 passengers with different preferences in the same class
+        success, b = book_ticket(
+            self.user_id, self.train_id, self.s1_id, self.s3_id, journey_date, '3A', 'GN',
+            [
+                {'name': 'Pax 1', 'age': 30, 'gender': 'Male', 'berth_preference': 'Upper'},
+                {'name': 'Pax 2', 'age': 25, 'gender': 'Female', 'berth_preference': 'No Preference'},
+                {'name': 'Pax 3', 'age': 40, 'gender': 'Male', 'berth_preference': 'Upper'},
+            ]
+        )
+        self.assertTrue(success)
+        seat_numbers = [p.seat_no for p in b.passengers]
+        # Ensure all assigned seat numbers are strictly unique!
+        self.assertEqual(len(seat_numbers), len(set(seat_numbers)))
 
 if __name__ == '__main__':
     unittest.main()

@@ -1,6 +1,6 @@
 import os
 from datetime import datetime, date, timedelta, time
-from models import db, Booking, Passenger, ChartLog, Train, RouteStation
+from models import db, Booking, Passenger, ChartLog, Train, RouteStation, utcnow
 
 # IRCTC 8-Hour Auto-Charting Constant
 AUTO_CHART_HOURS_BEFORE = 8
@@ -15,7 +15,7 @@ def prepare_reservation_chart(train_id, journey_date, trigger_type='MANUAL'):
     - Auto-cancels remaining Waitlisted (WL) passengers with full refund minus nominal clerkage.
     - Records execution in ChartLog.
     """
-    train = Train.query.get(train_id)
+    train = db.session.get(Train, train_id)
     if not train:
         return False, "Train not found.", None
 
@@ -70,14 +70,14 @@ def prepare_reservation_chart(train_id, journey_date, trigger_type='MANUAL'):
                 # Full refund for auto-cancelled WL minus nominal clerkage (Rs. 60)
                 fare_share = booking.total_fare / max(1, len(booking.passengers))
                 p.refund_amount = max(0.0, fare_share - 60.0)
-                p.cancelled_at = datetime.utcnow()
+                p.cancelled_at = utcnow()
                 auto_cancelled_wl += 1
 
     # 3. Create ChartLog record
     chart_log = ChartLog(
         train_id=train_id,
         journey_date=journey_date,
-        prepared_at=datetime.utcnow(),
+        prepared_at=utcnow(),
         total_passengers=total_passengers,
         cnf_count=cnf_count,
         rac_count=rac_count,
@@ -293,7 +293,7 @@ def get_full_passenger_chart(chart_log_id):
     - Lists RAC finalized passengers.
     - Lists Auto-Cancelled & Refunded Waitlisted passengers.
     """
-    chart_log = ChartLog.query.get(chart_log_id)
+    chart_log = db.session.get(ChartLog, chart_log_id)
     if not chart_log:
         return None
 
@@ -301,7 +301,7 @@ def get_full_passenger_chart(chart_log_id):
     bookings = Booking.query.filter_by(
         train_id=chart_log.train_id,
         journey_date=chart_log.journey_date
-    ).all()
+    ).options(db.selectinload(Booking.passengers), db.joinedload(Booking.from_station), db.joinedload(Booking.to_station)).all()
 
     confirmed_list = []
     rac_list = []

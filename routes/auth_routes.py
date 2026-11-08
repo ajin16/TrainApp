@@ -1,4 +1,4 @@
-from datetime import datetime
+import time
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session
 from models import db, User
 
@@ -18,7 +18,7 @@ def login():
             session['username'] = user.username
             session['full_name'] = user.full_name
             session['role'] = user.role
-            session['last_activity'] = datetime.utcnow().timestamp()
+            session['last_activity'] = time.time()
             
             flash(f"Welcome back, {user.full_name}!", "success")
             if user.role == 'admin':

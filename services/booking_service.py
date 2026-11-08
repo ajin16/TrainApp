@@ -1,7 +1,7 @@
 import random
 import string
-from datetime import datetime, date, timedelta, time
-from models import db, Train, RouteStation, Station, CoachQuotaConfig, Booking, Passenger
+from datetime import datetime, date, timedelta, time, timezone
+from models import db, Train, RouteStation, Station, CoachQuotaConfig, Booking, Passenger, utcnow
 
 BERTH_TYPES_SLEEPER_3AC = ['Lower', 'Middle', 'Upper', 'Lower', 'Middle', 'Upper', 'Side Lower', 'Side Upper']
 BERTH_TYPES_2AC = ['Lower', 'Upper', 'Lower', 'Upper', 'Side Lower', 'Side Upper']
@@ -78,13 +78,14 @@ def archive_or_purge_old_transactions(retention_days=5, purge=True):
     Permanently purges or archives booking transaction records older than retention_days.
     Returns count of affected records.
     """
-    cutoff = datetime.utcnow() - timedelta(days=retention_days)
+    cutoff = utcnow() - timedelta(days=retention_days)
     if purge:
         old_bookings = Booking.query.filter(Booking.booking_time < cutoff).all()
         count = len(old_bookings)
-        for b in old_bookings:
-            db.session.delete(b)
-        db.session.commit()
+        if count > 0:
+            for b in old_bookings:
+                db.session.delete(b)
+            db.session.commit()
         return count
     else:
         old_bookings = Booking.query.filter(
@@ -92,11 +93,12 @@ def archive_or_purge_old_transactions(retention_days=5, purge=True):
             Booking.is_archived == False
         ).all()
         count = len(old_bookings)
-        now = datetime.utcnow()
-        for b in old_bookings:
-            b.is_archived = True
-            b.archived_at = now
-        db.session.commit()
+        if count > 0:
+            now = utcnow()
+            for b in old_bookings:
+                b.is_archived = True
+                b.archived_at = now
+            db.session.commit()
         return count
 
 def delete_old_booking_history(days=5):
@@ -166,7 +168,7 @@ def get_class_availability(train_id, journey_date, travel_class, quota='GN'):
     """
     Compute real-time CNF, RAC, WL seat availability for a train, date, class, and quota.
     Strictly reserves 30% of total CNF seats for Tatkal quota (TQ).
-    Returns dict with count breakdown and display status string.
+    Optimized with single aggregate query to eliminate N+1 queries.
     """
     config = CoachQuotaConfig.query.filter_by(train_id=train_id, travel_class=travel_class).first()
     if not config:
@@ -182,19 +184,21 @@ def get_class_availability(train_id, journey_date, travel_class, quota='GN'):
     general_cnf_seats = max(0, config.total_cnf_seats - tatkal_cnf_seats)
     tatkal_wl_seats = max(1, round(config.total_wl_seats * 0.30))
     
-    # Count active passengers booked for this train, journey_date, class
-    active_passengers = Passenger.query.join(Booking).filter(
+    # Fast single SQL query with GROUP BY instead of loading and looping all ORM objects
+    counts = db.session.query(
+        Booking.quota, Passenger.current_status, db.func.count(Passenger.id)
+    ).join(Booking, Passenger.booking_id == Booking.id).filter(
         Booking.train_id == train_id,
         Booking.journey_date == journey_date,
         Booking.travel_class == travel_class,
         Passenger.is_cancelled == False
-    ).all()
+    ).group_by(Booking.quota, Passenger.current_status).all()
     
-    tatkal_cnf_count = sum(1 for p in active_passengers if p.booking.quota == 'TQ' and p.current_status == 'CNF')
-    general_cnf_count = sum(1 for p in active_passengers if p.booking.quota != 'TQ' and p.current_status == 'CNF')
-    tatkal_wl_count = sum(1 for p in active_passengers if p.booking.quota == 'TQ' and p.current_status == 'WL')
-    general_rac_count = sum(1 for p in active_passengers if p.booking.quota != 'TQ' and p.current_status == 'RAC')
-    general_wl_count = sum(1 for p in active_passengers if p.booking.quota != 'TQ' and p.current_status == 'WL')
+    tatkal_cnf_count = sum(cnt for q, st, cnt in counts if q == 'TQ' and st == 'CNF')
+    general_cnf_count = sum(cnt for q, st, cnt in counts if q != 'TQ' and st == 'CNF')
+    tatkal_wl_count = sum(cnt for q, st, cnt in counts if q == 'TQ' and st == 'WL')
+    general_rac_count = sum(cnt for q, st, cnt in counts if q != 'TQ' and st == 'RAC')
+    general_wl_count = sum(cnt for q, st, cnt in counts if q != 'TQ' and st == 'WL')
     
     if quota == 'TQ':
         cnf_left = max(0, tatkal_cnf_seats - tatkal_cnf_count)
@@ -268,6 +272,7 @@ def search_trains(from_station_code, to_station_code, journey_date, quota='GN'):
     """
     Find trains running between source and destination stations on given date.
     Returns list of dicts with train info, route details, and class availability.
+    Eager loads routes and configs to eliminate N+1 queries.
     """
     from_st = Station.query.filter_by(code=from_station_code.upper()).first()
     to_st = Station.query.filter_by(code=to_station_code.upper()).first()
@@ -276,8 +281,11 @@ def search_trains(from_station_code, to_station_code, journey_date, quota='GN'):
         return [], from_st, to_st
 
     results = []
-    # Find all trains having both stations in their route
-    trains = Train.query.filter_by(is_active=True).all()
+    # Eager load routes and configs for high throughput
+    trains = Train.query.filter_by(is_active=True).options(
+        db.joinedload(Train.routes),
+        db.joinedload(Train.configs)
+    ).all()
     
     for train in trains:
         src_route = None
@@ -291,7 +299,7 @@ def search_trains(from_station_code, to_station_code, journey_date, quota='GN'):
                 
         # Must pass from_st BEFORE to_st
         if src_route and dst_route and src_route.stop_number < dst_route.stop_number:
-            distance = round(dst_route.distance_km - src_route.distance_km, 1)
+            distance = max(1.0, round(dst_route.distance_km - src_route.distance_km, 1))
             
             # Class availability details
             availabilities = {}
@@ -328,28 +336,62 @@ def assign_berth_type(travel_class, seat_no):
         return 'Cabin' if seat_no % 2 == 1 else 'Coupe'
     return 'Lower'
 
+def get_occupied_seat_numbers(train_id, journey_date, travel_class):
+    """Return set of seat numbers currently occupied by active CNF passengers for this train run."""
+    occupied = db.session.query(Passenger.seat_no).join(Booking).filter(
+        Booking.train_id == train_id,
+        Booking.journey_date == journey_date,
+        Booking.travel_class == travel_class,
+        Passenger.current_status == 'CNF',
+        Passenger.is_cancelled == False,
+        Passenger.seat_no.isnot(None)
+    ).all()
+    return {s[0] for s in occupied}
+
+def find_available_seat_number(travel_class, occupied_seats, min_seat, max_seat, preference, passenger_age):
+    """
+    Find an unoccupied seat number between min_seat and max_seat without collision.
+    Matches berth preference if a free matching seat exists; otherwise allocates next free sequential seat.
+    Senior citizens (age >= 60) prioritize Lower berth.
+    """
+    target_pref = preference
+    if passenger_age >= 60 and preference in ['No Preference', 'Lower']:
+        target_pref = 'Lower'
+
+    # Collect free candidate seats in quota range
+    free_seats = [s for s in range(min_seat, max_seat + 1) if s not in occupied_seats]
+    if not free_seats:
+        # Fallback beyond max_seat if needed
+        free_seats = [s for s in range(1, 500) if s not in occupied_seats]
+        if not free_seats:
+            return 1, assign_berth_type(travel_class, 1)
+
+    # Search for preference match among free seats
+    if target_pref and target_pref != 'No Preference':
+        for s in free_seats:
+            b_type = assign_berth_type(travel_class, s)
+            if b_type.lower() == target_pref.lower():
+                return s, b_type
+
+    chosen = free_seats[0]
+    return chosen, assign_berth_type(travel_class, chosen)
+
 def find_preferred_seat_number(travel_class, current_cnf_count, preference, passenger_age):
     """
-    Intelligent Berth Preference Allocator:
-    Finds a seat number matching the requested preference (Lower, Middle, Upper, Side Lower, Side Upper, Window),
-    or defaults to next sequential seat.
-    Senior citizens (age >= 60) automatically get Lower berth priority if available.
+    Intelligent Berth Preference Allocator (backward-compatible wrapper).
     """
     total_capacity = 72
-    # Determine target berth type
     target_pref = preference
     if passenger_age >= 60 and preference in ['No Preference', 'Lower']:
         target_pref = 'Lower'
         
     start_seat = current_cnf_count + 1
     
-    # Try up to next 16 seat candidates to match requested berth type
     for check_seat in range(start_seat, min(start_seat + 16, total_capacity + 1)):
         b_type = assign_berth_type(travel_class, check_seat)
         if target_pref != 'No Preference' and b_type.lower() == target_pref.lower():
             return check_seat, b_type
 
-    # Fallback to default next seat
     fallback_seat = start_seat
     fallback_berth = assign_berth_type(travel_class, fallback_seat)
     return fallback_seat, fallback_berth
@@ -359,6 +401,7 @@ def book_ticket(user_id, train_id, from_station_id, to_station_id, journey_date,
     Process ticket booking for multiple passengers.
     Allocates CNF/RAC/WL sequentially, matching berth preferences for CNF seats.
     Strictly validates 14-day Advance Reservation Period and 10:00 AM Tatkal window.
+    Guarantees zero duplicate seat numbers.
     """
     # 1. Validate Advance Reservation Period (14 Days)
     is_arp_valid, arp_err = validate_advance_reservation_period(journey_date)
@@ -370,9 +413,9 @@ def book_ticket(user_id, train_id, from_station_id, to_station_id, journey_date,
     if not is_tatkal_valid:
         return False, tatkal_err
 
-    train = Train.query.get(train_id)
-    from_st = Station.query.get(from_station_id)
-    to_st = Station.query.get(to_station_id)
+    train = db.session.get(Train, train_id)
+    from_st = db.session.get(Station, from_station_id)
+    to_st = db.session.get(Station, to_station_id)
     
     if not train or not from_st or not to_st:
         return False, "Invalid train or station selected."
@@ -382,7 +425,7 @@ def book_ticket(user_id, train_id, from_station_id, to_station_id, journey_date,
     if not src_r or not dst_r or src_r.stop_number >= dst_r.stop_number:
         return False, "Invalid station sequence for selected train."
 
-    distance = dst_r.distance_km - src_r.distance_km
+    distance = max(1.0, round(dst_r.distance_km - src_r.distance_km, 1))
     fare_info = calculate_fare(distance, travel_class, quota)
     total_fare = fare_info['total_per_passenger'] * len(passengers_data)
     
@@ -411,6 +454,10 @@ def book_ticket(user_id, train_id, from_station_id, to_station_id, journey_date,
     db.session.flush()
     
     coach_prefix = COACH_PREFIXES.get(travel_class, 'B')
+    occupied_seats = get_occupied_seat_numbers(train_id, journey_date, travel_class)
+    cfg = CoachQuotaConfig.query.filter_by(train_id=train_id, travel_class=travel_class).first()
+    tatkal_cnf_seats = max(1, round(cfg.total_cnf_seats * 0.30)) if cfg else 10
+    general_cnf_seats = max(0, cfg.total_cnf_seats - tatkal_cnf_seats) if cfg else 20
     
     for p_idx, p_data in enumerate(passengers_data):
         current_avail = get_class_availability(train_id, journey_date, travel_class, quota=quota)
@@ -427,13 +474,14 @@ def book_ticket(user_id, train_id, from_station_id, to_station_id, journey_date,
         if current_avail['cnf_left'] > 0:
             status = 'CNF'
             if quota == 'TQ':
-                # Tatkal CNF allocated from reserved seat partition
-                allocated_seat_index = current_avail['general_quota_seats'] + current_avail['cnf_count']
+                min_s = general_cnf_seats + 1
+                max_s = cfg.total_cnf_seats if cfg else 30
             else:
-                allocated_seat_index = current_avail['cnf_count']
+                min_s = 1
+                max_s = general_cnf_seats
                 
-            # Find preferred berth type seat
-            seat_no, berth_type = find_preferred_seat_number(travel_class, allocated_seat_index, p_pref, p_age)
+            seat_no, berth_type = find_available_seat_number(travel_class, occupied_seats, min_s, max_s, p_pref, p_age)
+            occupied_seats.add(seat_no)
             coach_num = ((seat_no - 1) // 72) + 1
             coach_no = f"{coach_prefix}{coach_num}"
         elif current_avail['rac_left'] > 0:
@@ -465,6 +513,7 @@ def book_ticket(user_id, train_id, from_station_id, to_station_id, journey_date,
             is_cancelled=False
         )
         db.session.add(passenger)
+        db.session.flush()
         
     db.session.commit()
     return True, booking

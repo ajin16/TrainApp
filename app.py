@@ -28,13 +28,16 @@ def create_app(test_config=None, testing=False):
     app.register_blueprint(user_bp)
     app.register_blueprint(admin_bp)
 
+    # In-memory station cache with 60-second TTL to avoid redundant queries on every request
+    _station_cache = {'time': 0, 'data': []}
+
     @app.before_request
     def check_inactivity_timeout():
         """Requirement 8: Auto log off after 5 minutes of inactivity."""
         if request.path.startswith('/static'):
             return
         if 'user_id' in session:
-            now = datetime.utcnow().timestamp()
+            now = time.time()
             last_activity = session.get('last_activity')
             # 5 minutes = 300 seconds
             if last_activity and (now - last_activity > 300):
@@ -47,8 +50,15 @@ def create_app(test_config=None, testing=False):
     def inject_globals():
         now = datetime.now()
         is_tatkal_open = now.time() >= dtime(10, 0)
+        curr_time = time.time()
+        if curr_time - _station_cache['time'] > 60 or not _station_cache['data']:
+            try:
+                _station_cache['data'] = Station.query.order_by(Station.name).all() if db.engine else []
+                _station_cache['time'] = curr_time
+            except Exception:
+                pass
         return {
-            'all_stations': Station.query.order_by(Station.name).all() if db.engine else [],
+            'all_stations': _station_cache['data'],
             'server_now': now,
             'is_tatkal_open': is_tatkal_open,
             'tatkal_open_time_str': '10:00 AM',

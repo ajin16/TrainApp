@@ -1,6 +1,5 @@
-from datetime import datetime
-from models import db, Booking, Passenger, CoachQuotaConfig, Train
-from services.booking_service import COACH_PREFIXES, assign_berth_type
+from models import db, Booking, Passenger, CoachQuotaConfig, Train, utcnow
+from services.booking_service import COACH_PREFIXES, assign_berth_type, find_available_seat_number
 
 def calculate_cancellation_refund(travel_class, status, original_passenger_fare):
     """
@@ -28,6 +27,7 @@ def promote_rac_and_wl(train_id, journey_date, travel_class):
     """
     Core IRCTC Promotion Engine:
     1. Upgrades RAC 1 -> CNF when a CNF berth becomes vacant, allocating coach & seat.
+       Allocates the specific vacated seat without duplicate seat collisions.
     2. Upgrades WL 1 -> RAC when an RAC berth becomes vacant.
     3. Re-indexes remaining RAC & WL position numbers.
     """
@@ -48,18 +48,23 @@ def promote_rac_and_wl(train_id, journey_date, travel_class):
     wl_passengers = sorted([p for p in all_passengers if p.current_status == 'WL'], key=lambda x: x.rac_wl_number or 9999)
     
     coach_prefix = COACH_PREFIXES.get(travel_class, 'B')
+    occupied_seats = {p.seat_no for p in cnf_passengers if p.seat_no is not None}
     
     # 1. Check if CNF seats are available to promote RAC passengers
     while len(cnf_passengers) < config.total_cnf_seats and rac_passengers:
         promoted = rac_passengers.pop(0)
         promoted.current_status = 'CNF'
         
-        # Determine next available coach and seat
-        new_cnf_index = len(cnf_passengers) + 1
-        coach_num = ((new_cnf_index - 1) // 72) + 1
+        # Allocate lowest available vacated seat number
+        seat_no, berth_type = find_available_seat_number(
+            travel_class, occupied_seats, 1, config.total_cnf_seats,
+            promoted.berth_preference, promoted.age
+        )
+        occupied_seats.add(seat_no)
+        promoted.seat_no = seat_no
+        promoted.berth_type = berth_type
+        coach_num = ((seat_no - 1) // 72) + 1
         promoted.coach_no = f"{coach_prefix}{coach_num}"
-        promoted.seat_no = ((new_cnf_index - 1) % 72) + 1
-        promoted.berth_type = assign_berth_type(travel_class, promoted.seat_no)
         promoted.rac_wl_number = None
         
         cnf_passengers.append(promoted)
@@ -76,6 +81,8 @@ def promote_rac_and_wl(train_id, journey_date, travel_class):
     # 3. Update RAC position numbers (RAC 1, RAC 2...)
     for idx, p in enumerate(rac_passengers, start=1):
         p.rac_wl_number = idx
+        p.coach_no = 'RAC'
+        p.berth_type = 'Side Lower (Shared)'
         p.seat_no = (idx + 1) // 2
 
     # 4. Update WL position numbers (WL 1, WL 2...)
@@ -87,7 +94,7 @@ def cancel_passengers(booking_id, passenger_ids_to_cancel):
     Cancel specified passengers for a booking, calculate refunds,
     and trigger RAC -> CNF & WL -> RAC cascading promotions.
     """
-    booking = Booking.query.get(booking_id)
+    booking = db.session.get(Booking, booking_id)
     if not booking:
         return False, "Booking not found", 0.0
 
@@ -104,14 +111,14 @@ def cancel_passengers(booking_id, passenger_ids_to_cancel):
     if not passengers:
         return False, "No valid active passengers selected for cancellation.", 0.0
 
-    fare_per_passenger = booking.total_fare / len(booking.passengers)
+    fare_per_passenger = booking.total_fare / max(1, len(booking.passengers))
 
     for p in passengers:
         fee, refund = calculate_cancellation_refund(booking.travel_class, p.current_status, fare_per_passenger)
         p.is_cancelled = True
         p.current_status = 'CANCELLED'
         p.refund_amount = refund
-        p.cancelled_at = datetime.utcnow()
+        p.cancelled_at = utcnow()
         p.coach_no = None
         p.seat_no = None
         p.rac_wl_number = None

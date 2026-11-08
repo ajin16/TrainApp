@@ -122,45 +122,6 @@
             </div>
         </div>
 
-        <!-- Visual Coach Seat Map Section -->
-        <div class="px-4 mb-4">
-            <h6 class="fw-bold text-dark border-bottom pb-2 mb-3">
-                <i class="fa-solid fa-vector-square text-primary me-2"></i>VISUAL COACH SEAT MAP (SEAT VIEW)
-            </h6>
-            <div class="row g-3">
-                {% for p in summary.passengers %}
-                    {% if p.coach_bay %}
-                        <div class="col-md-6">
-                            <div class="card border shadow-xs rounded-3 bg-light">
-                                <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center py-2">
-                                    <span class="fw-bold small"><i class="fa-solid fa-user me-1 text-warning"></i> {{ p.name }}</span>
-                                    <span class="badge bg-primary">Coach {{ p.coach_no }} - Bay {{ p.coach_bay.bay_number }}</span>
-                                </div>
-                                <div class="card-body p-3">
-                                    <div class="small text-muted mb-2 text-center">
-                                        Coach Layout: <strong>{{ summary.travel_class }} Class</strong> | Seat Allocated: <strong class="text-success">{{ p.seat_no }} ({{ p.berth_type }})</strong>
-                                    </div>
-                                    <!-- Seat Grid Matrix -->
-                                    <div class="d-flex flex-wrap gap-2 justify-content-center">
-                                        {% for seat in p.coach_bay.layout %}
-                                            <div class="p-2 border rounded text-center {% if seat.is_allocated %}bg-success text-white fw-bold shadow-sm{% else %}bg-white text-muted{% endif %}" 
-                                                 style="min-width: 60px; min-height: 60px; font-size: 0.8rem;">
-                                                <div class="fw-bold">{{ seat.seat_no }}</div>
-                                                <div style="font-size: 0.75rem;">{{ seat.type }}</div>
-                                                {% if seat.is_allocated %}
-                                                    <i class="fa-solid fa-location-dot fa-xs text-warning mt-1"></i>
-                                                {% endif %}
-                                            </div>
-                                        {% endfor %}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    {% endif %}
-                {% endfor %}
-            </div>
-        </div>
-
         <!-- Fare Breakdown & Barcode simulation -->
         <div class="row px-4 pb-4 align-items-center">
             <div class="col-md-6">
