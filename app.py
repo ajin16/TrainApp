@@ -3,7 +3,7 @@ import threading
 import time
 from datetime import datetime, date, timedelta, time as dtime
 import click
-from flask import Flask, request, session, redirect, url_for, flash
+from flask import Flask, request, session, redirect, url_for, flash, render_template, jsonify
 from flask_migrate import Migrate
 from config import Config
 from models import db, User, Station, Train, Booking
@@ -20,6 +20,14 @@ def create_app(test_config=None, testing=False):
         app.config.update(test_config)
     if testing or app.config.get('TESTING'):
         app.config['TESTING'] = True
+
+    # Ensure engine options match the active database dialect (e.g. SQLite memory in tests doesn't take QueuePool options)
+    db_uri = str(app.config.get('SQLALCHEMY_DATABASE_URI', ''))
+    if db_uri.startswith('sqlite'):
+        engine_opts = dict(app.config.get('SQLALCHEMY_ENGINE_OPTIONS', {}))
+        for opt in ('pool_size', 'max_overflow', 'pool_timeout'):
+            engine_opts.pop(opt, None)
+        app.config['SQLALCHEMY_ENGINE_OPTIONS'] = engine_opts
 
     db.init_app(app)
     migrate.init_app(app, db)
@@ -66,6 +74,41 @@ def create_app(test_config=None, testing=False):
             'max_journey_date': (date.today() + timedelta(days=14)).strftime('%Y-%m-%d'),
             'tomorrow_date_str': (date.today() + timedelta(days=1)).strftime('%Y-%m-%d')
         }
+
+    @app.after_request
+    def apply_security_headers(response):
+        """Apply production OWASP security headers to all responses."""
+        response.headers['X-Content-Type-Options'] = 'nosniff'
+        response.headers['X-Frame-Options'] = 'SAMEORIGIN'
+        response.headers['X-XSS-Protection'] = '1; mode=block'
+        response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+        return response
+
+    @app.route('/health')
+    def health_check():
+        """Production Health Check endpoint for load balancers & uptime monitors."""
+        try:
+            db.session.execute(db.text('SELECT 1'))
+            return jsonify({
+                'status': 'healthy',
+                'database': 'connected',
+                'timestamp': datetime.now().isoformat()
+            }), 200
+        except Exception as e:
+            return jsonify({
+                'status': 'unhealthy',
+                'database': 'disconnected',
+                'error': str(e)
+            }), 503
+
+    @app.errorhandler(404)
+    def handle_404(e):
+        return render_template('errors/404.html'), 404
+
+    @app.errorhandler(500)
+    def handle_500(e):
+        db.session.rollback()
+        return render_template('errors/500.html'), 500
 
     @app.template_filter('datetimeformat')
     def datetimeformat(value, format='%d-%b-%Y %H:%M'):
@@ -143,5 +186,5 @@ app = create_app()
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
-    debug = os.environ.get('FLASK_DEBUG', '1') == '1'
+    debug = os.environ.get('FLASK_DEBUG', '0') == '1'
     app.run(debug=debug, host='0.0.0.0', port=port)

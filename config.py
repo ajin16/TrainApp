@@ -11,8 +11,11 @@ class Config:
     # Flask Secret Key
     SECRET_KEY = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
 
-    # Session timeout configuration (5 minutes of inactivity auto-logout)
+    # Session security configuration
     PERMANENT_SESSION_LIFETIME = timedelta(minutes=5)
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = 'Lax'
+    SESSION_COOKIE_SECURE = os.getenv('SESSION_COOKIE_SECURE', 'False').lower() in ('true', '1')
 
     # MySQL connection parameters (loaded strictly from environment variables)
     MYSQL_HOST = os.getenv('MYSQL_HOST')
@@ -44,10 +47,19 @@ class Config:
 
     SQLALCHEMY_DATABASE_URI = _db_url
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+    
+    # Production-ready resilient connection pooling
     SQLALCHEMY_ENGINE_OPTIONS = {
-        'pool_recycle': 280,
+        'pool_recycle': int(os.getenv('DB_POOL_RECYCLE', '280')),
         'pool_pre_ping': True,
     }
+    # Pool sizing parameters applicable to server-based connection pools (MySQL / PostgreSQL)
+    if not _db_url.startswith('sqlite'):
+        SQLALCHEMY_ENGINE_OPTIONS.update({
+            'pool_size': int(os.getenv('DB_POOL_SIZE', '10')),
+            'max_overflow': int(os.getenv('DB_MAX_OVERFLOW', '20')),
+            'pool_timeout': int(os.getenv('DB_POOL_TIMEOUT', '30')),
+        })
 
     # Render / web server port configuration
     PORT = int(os.getenv('PORT', 5000))

@@ -483,6 +483,26 @@ class TestIRCTCEngine(unittest.TestCase):
         self.assertEqual(resp_my_bookings.status_code, 302)
         self.assertIn('/admin/bookings', resp_my_bookings.location)
 
+    def test_production_health_check_and_security_headers(self):
+        """Verify production /health endpoint, OWASP security headers, and 404 page."""
+        # 1. Health check endpoint
+        resp_health = self.client.get('/health')
+        self.assertEqual(resp_health.status_code, 200)
+        json_data = resp_health.get_json()
+        self.assertEqual(json_data['status'], 'healthy')
+        self.assertEqual(json_data['database'], 'connected')
+
+        # 2. OWASP security response headers
+        self.assertEqual(resp_health.headers.get('X-Content-Type-Options'), 'nosniff')
+        self.assertEqual(resp_health.headers.get('X-Frame-Options'), 'SAMEORIGIN')
+        self.assertEqual(resp_health.headers.get('X-XSS-Protection'), '1; mode=block')
+
+        # 3. Custom 404 error page
+        resp_404 = self.client.get('/non-existent-page-url-12345')
+        self.assertEqual(resp_404.status_code, 404)
+        self.assertIn(b'Error Code 404', resp_404.data)
+        self.assertIn(b'Station / Route Not Found', resp_404.data)
+
 if __name__ == '__main__':
     unittest.main()
 
